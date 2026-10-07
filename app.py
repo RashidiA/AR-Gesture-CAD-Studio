@@ -262,9 +262,8 @@ html_code = """
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
-  // Smooth position tracking
   let smoothedCursor = { x: 0, y: 0 };
-  const alpha = 0.35; // Exponential Moving Average smoothing factor
+  const alpha = 0.35;
 
   const shapes2D = [];
 
@@ -276,36 +275,28 @@ html_code = """
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
-  renderer.shadowMap.enabled = true;
 
   // Scene Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
   mainLight.position.set(200, 400, 500);
   scene.add(mainLight);
 
-  const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.5);
+  const fillLight = new THREE.DirectionalLight(0x00ffff, 0.8);
   fillLight.position.set(-200, -200, 300);
   scene.add(fillLight);
-
-  // Background Grid Helper
-  const gridHelper = new THREE.GridHelper(1000, 20, 0x38bdf8, 0x1f2937);
-  gridHelper.rotation.x = Math.PI / 2;
-  gridHelper.position.z = -200;
-  scene.add(gridHelper);
 
   const objects3D = [];
   let previewMesh3D = null;
 
   function animate3D() {
     requestAnimationFrame(animate3D);
-    
-    // Rotate generated 3D primitives smoothly
+
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.008;
-      obj.rotation.x += 0.004;
+      obj.rotation.y += 0.01;
+      obj.rotation.x += 0.005;
     });
 
     if (previewMesh3D) {
@@ -362,12 +353,11 @@ html_code = """
   }
 
   function mapScreenTo3DWorld(pixelX, pixelY) {
-    const worldX = (pixelX - 550) * 0.95;
-    const worldY = -(pixelY - 325) * 0.95;
+    const worldX = (pixelX - 550);
+    const worldY = -(pixelY - 325);
     return new THREE.Vector3(worldX, worldY, 0);
   }
 
-  // --- Real-Time Mesh Creation Engine ---
   function createMeshForTool(tool, pathData = null) {
     let geometry;
 
@@ -378,34 +368,27 @@ html_code = """
     } else if (tool === 'cone') {
       geometry = new THREE.ConeGeometry(1, 2, 32);
     } else if (tool === 'extrude' && pathData && pathData.length > 2) {
-      // Convert 2D path into THREE.Shape for true CAD Extrusion
       const shape = new THREE.Shape();
       const startPos = mapScreenTo3DWorld(pathData[0].x, pathData[0].y);
-      shape.moveTo(startPos.x / 50, startPos.y / 50);
+      shape.moveTo(startPos.x / 10, startPos.y / 10);
 
       for (let i = 1; i < pathData.length; i++) {
         const pt = mapScreenTo3DWorld(pathData[i].x, pathData[i].y);
-        shape.lineTo(pt.x / 50, pt.y / 50);
+        shape.lineTo(pt.x / 10, pt.y / 10);
       }
       shape.closePath();
 
-      const extrudeSettings = {
-        steps: 1,
-        depth: 2,
-        bevelEnabled: true,
-        bevelThickness: 0.2,
-        bevelSize: 0.2,
-        bevelSegments: 3
-      };
+      const extrudeSettings = { steps: 1, depth: 5, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5 };
       geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     } else {
       geometry = new THREE.SphereGeometry(1, 32, 32);
     }
 
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      roughness: 0.3,
-      metalness: 0.2,
+    const material = new THREE.MeshPhongMaterial({
+      color: 0x00ff88,
+      emissive: 0x003311,
+      specular: 0xffffff,
+      shininess: 100,
       side: THREE.DoubleSide
     });
 
@@ -414,16 +397,16 @@ html_code = """
 
   function update3DPreview(start, end) {
     const dragDistance = getDistance(start, end);
-    
+
     if (currentTool === 'extrude') {
       if (activeDrawnPath.length > 3) {
         if (previewMesh3D) scene.remove(previewMesh3D);
         previewMesh3D = createMeshForTool('extrude', activeDrawnPath);
-        previewMesh3D.scale.set(40, 40, 40);
+        previewMesh3D.scale.set(10, 10, 10);
         scene.add(previewMesh3D);
       }
     } else {
-      const size = Math.max(dragDistance * 0.8, 30);
+      const size = Math.max(dragDistance * 1.2, 40);
       if (!previewMesh3D) {
         previewMesh3D = createMeshForTool(currentTool);
         scene.add(previewMesh3D);
@@ -474,7 +457,6 @@ html_code = """
   }
 
   function onResults(results) {
-    // Clear & draw mirrored video frame
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
@@ -482,7 +464,6 @@ html_code = """
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // Render 2D Shapes on top of camera feed
     if (activeMode === '2D') {
       shapes2D.forEach(renderSingle2DShape);
     }
@@ -494,13 +475,11 @@ html_code = """
       const thumbTip = landmarks[4];
       const indexTip = landmarks[8];
 
-      // Calculate mirrored coordinates
       const rawCursorX = (1 - indexTip.x) * 1100;
       const rawCursorY = indexTip.y * 650;
       const rawThumbX = (1 - thumbTip.x) * 1100;
       const rawThumbY = thumbTip.y * 650;
 
-      // Position Exponential Smoothing
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
@@ -512,14 +491,13 @@ html_code = """
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
       const currentlyPinching = pinchDist < 45;
 
-      // Draw Cursor Indicator
       ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
       ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
       ctx2D.shadowBlur = 10;
       ctx2D.beginPath();
       ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 8, 0, 2 * Math.PI);
       ctx2D.fill();
-      ctx2D.shadowBlur = 0; // reset blur
+      ctx2D.shadowBlur = 0;
 
       if (currentlyPinching) {
         if (!isPinching) {
@@ -569,7 +547,6 @@ html_code = """
     }
   }
 
-  // --- Initialize MediaPipe Tracking ---
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
