@@ -159,7 +159,7 @@ html_code = """
       <span class="ui-label">Drawing Tools</span>
       <div class="btn-grid">
         <button id="btn-free" class="active" onclick="setTool('free')">Freehand</button>
-        <button id="btn-rect" onclick="setTool('rectangle')">Rectangle</button>
+        <button id="btn-rectangle" onclick="setTool('rectangle')">Rectangle</button>
         <button id="btn-circle" onclick="setTool('circle')">Circle</button>
         <button id="btn-triangle" onclick="setTool('triangle')">Triangle</button>
       </div>
@@ -271,17 +271,21 @@ html_code = """
   }
 
   function renderSingle2DShape(shape) {
+    if (!shape.start || !shape.end) return;
+
     ctx2D.strokeStyle = shape.color || '#00ff88';
     ctx2D.lineWidth = 4;
     ctx2D.beginPath();
 
     if (shape.type === 'free') {
-      if (shape.path.length > 0) {
+      if (shape.path && shape.path.length > 0) {
         ctx2D.moveTo(shape.path[0].x, shape.path[0].y);
         shape.path.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
       }
     } else if (shape.type === 'rectangle') {
-      ctx2D.rect(shape.start.x, shape.start.y, shape.end.x - shape.start.x, shape.end.y - shape.start.y);
+      const w = shape.end.x - shape.start.x;
+      const h = shape.end.y - shape.start.y;
+      ctx2D.rect(shape.start.x, shape.start.y, w, h);
     } else if (shape.type === 'circle') {
       const radius = Math.hypot(shape.end.x - shape.start.x, shape.end.y - shape.start.y);
       ctx2D.arc(shape.start.x, shape.start.y, radius, 0, 2 * Math.PI);
@@ -369,7 +373,6 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Native coordinates mapped directly (CSS scaleX(-1) handles visual mirror)
       const canvasCursorX = indexTip.x * 1100;
       const canvasCursorY = indexTip.y * 650;
 
@@ -431,8 +434,8 @@ html_code = """
           } else {
             shapes2D.push({
               type: currentTool,
-              start: startPinchPoint,
-              end: currentPinchPoint || startPinchPoint,
+              start: { ...startPinchPoint },
+              end: { ...currentPinchPoint },
               path: [...activeDrawnPath],
               color: '#00ff88'
             });
