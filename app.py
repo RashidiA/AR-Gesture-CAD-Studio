@@ -198,7 +198,7 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js Engine Setup
+  // Three.js 3D Engine Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
@@ -207,16 +207,12 @@ html_code = """
   renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
 
   const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
   mainLight.position.set(200, 400, 500);
   scene.add(mainLight);
-
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
-  fillLight.position.set(-200, -200, 300);
-  scene.add(fillLight);
 
   const objects3D = [];
   let previewMesh3D = null;
@@ -224,8 +220,8 @@ html_code = """
   function animate3D() {
     requestAnimationFrame(animate3D);
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.005;
-      obj.rotation.x += 0.002;
+      obj.rotation.y += 0.008;
+      obj.rotation.x += 0.004;
     });
     renderer.render(scene, camera);
   }
@@ -242,7 +238,7 @@ html_code = """
     document.getElementById('btn-3d').classList.toggle('active', mode === '3D');
 
     if (mode === '3D' && !is3DTool(currentTool)) {
-      setTool('cube');
+      setTool('cone');
     } else if (mode === '2D' && is3DTool(currentTool)) {
       setTool('free');
     }
@@ -296,7 +292,7 @@ html_code = """
 
   function update3DPreview(start, end) {
     const dist = getDistance(start, end);
-    const radius = Math.max(dist / 2, 15);
+    const radius = Math.max(dist / 2, 20);
 
     if (!previewMesh3D) {
       let geometry;
@@ -309,18 +305,12 @@ html_code = """
       }
 
       const material = new THREE.MeshStandardMaterial({
-        color: 0xcc0000,
-        roughness: 0.3,
-        metalness: 0.1
+        color: 0x00ff88,
+        roughness: 0.2,
+        metalness: 0.3
       });
 
       previewMesh3D = new THREE.Mesh(geometry, material);
-
-      if (currentTool !== 'sphere') {
-        previewMesh3D.rotation.x = Math.PI / 6;
-        previewMesh3D.rotation.y = Math.PI / 4;
-      }
-
       scene.add(previewMesh3D);
     }
 
@@ -372,14 +362,14 @@ html_code = """
     // 1. Clear 2D Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Render Webcam Feed
+    // 2. Render Mirrored Webcam Stream
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // 3. Render Saved 2D Shapes
+    // 3. Render Completed 2D Shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -398,13 +388,13 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm Dot
+      // Palm Indicator
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Pinch Check
+      // Check Pinch Gesture
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
@@ -417,7 +407,7 @@ html_code = """
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      const is3DActive = (dimensionMode === '3D') || is3DTool(currentTool);
+      const activeIs3D = is3DTool(currentTool);
 
       if (currentlyPinching) {
         if (!isPinching) {
@@ -429,7 +419,7 @@ html_code = """
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
 
-          if (is3DActive) {
+          if (activeIs3D) {
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
             activeDrawnPath.push(currentPinchPoint);
@@ -447,7 +437,7 @@ html_code = """
           isPinching = false;
           statusBar.innerText = "Gesture Status: Released (Saved)";
 
-          if (is3DActive) {
+          if (activeIs3D) {
             finalize3DSolid();
           } else {
             shapes2D.push({
