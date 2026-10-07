@@ -121,6 +121,12 @@ html_code = """
       color: #000 !important;
     }
 
+    button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      border-color: #333;
+    }
+
     #status-bar {
       position: absolute;
       bottom: 15px;
@@ -146,14 +152,14 @@ html_code = """
 
   <div id="ui-panel">
     <div class="ui-group">
-      <span class="ui-label">Dimension Mode</span>
+      <span class="ui-label">Select Mode</span>
       <div class="btn-grid">
-        <button id="btn-2d" class="active" onclick="setDimensionMode('2D')">2D Plane</button>
-        <button id="btn-3d" onclick="setDimensionMode('3D')">3D Solid</button>
+        <button id="btn-mode-2d" class="active" onclick="switchMode('2D')">2D Mode</button>
+        <button id="btn-mode-3d" onclick="switchMode('3D')">3D Mode</button>
       </div>
     </div>
 
-    <div class="ui-group">
+    <div class="ui-group" id="group-2d-tools">
       <span class="ui-label">2D Drawing Tools</span>
       <div class="btn-grid">
         <button id="btn-free" class="active" onclick="setTool('free')">Freehand</button>
@@ -163,7 +169,7 @@ html_code = """
       </div>
     </div>
 
-    <div class="ui-group" id="3d-tools-group">
+    <div class="ui-group" id="group-3d-tools" style="display: none;">
       <span class="ui-label">3D Primitives</span>
       <div class="btn-grid">
         <button id="btn-cube" onclick="setTool('cube')">Cube</button>
@@ -175,7 +181,7 @@ html_code = """
 
     <div class="ui-group">
       <span class="ui-label">Canvas Actions</span>
-      <button onclick="clearCanvas()" style="background: #e63946; border: none; color: white;">Clear All</button>
+      <button onclick="clearCanvas()" style="background: #e63946; border: none; color: white;">Clear Canvas</button>
     </div>
   </div>
 
@@ -189,7 +195,7 @@ html_code = """
   const canvas3D = document.getElementById('3d-canvas');
   const statusBar = document.getElementById('status-bar');
 
-  let dimensionMode = '2D';
+  let activeMode = '2D'; // Strict mode: '2D' or '3D'
   let currentTool = 'free';
   let isPinching = false;
   let startPinchPoint = null;
@@ -198,7 +204,7 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js 3D Engine Setup
+  // Three.js Engine Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
@@ -219,28 +225,36 @@ html_code = """
 
   function animate3D() {
     requestAnimationFrame(animate3D);
-    objects3D.forEach(obj => {
-      obj.rotation.y += 0.008;
-      obj.rotation.x += 0.004;
-    });
-    renderer.render(scene, camera);
+    if (activeMode === '3D') {
+      objects3D.forEach(obj => {
+        obj.rotation.y += 0.008;
+        obj.rotation.x += 0.004;
+      });
+      renderer.render(scene, camera);
+    } else {
+      renderer.clear();
+    }
   }
   animate3D();
 
-  function is3DTool(tool) {
-    const t = tool.toLowerCase();
-    return t === 'cube' || t === 'sphere' || t === 'cone' || t === 'extrude';
-  }
+  function switchMode(mode) {
+    activeMode = mode;
+    clearCanvas(); // Reset session on mode switch
 
-  function setDimensionMode(mode) {
-    dimensionMode = mode;
-    document.getElementById('btn-2d').classList.toggle('active', mode === '2D');
-    document.getElementById('btn-3d').classList.toggle('active', mode === '3D');
+    document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
+    document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3D');
 
-    if (mode === '3D' && !is3DTool(currentTool)) {
-      setTool('cone');
-    } else if (mode === '2D' && is3DTool(currentTool)) {
+    const group2D = document.getElementById('group-2d-tools');
+    const group3D = document.getElementById('group-3d-tools');
+
+    if (mode === '2D') {
+      group2D.style.display = 'flex';
+      group3D.style.display = 'none';
       setTool('free');
+    } else {
+      group2D.style.display = 'none';
+      group3D.style.display = 'flex';
+      setTool('cube');
     }
   }
 
@@ -250,22 +264,14 @@ html_code = """
     document.querySelectorAll('.btn-grid button').forEach(btn => btn.classList.remove('active'));
     const activeBtn = document.getElementById(`btn-${currentTool}`);
     if (activeBtn) activeBtn.classList.add('active');
-
-    if (is3DTool(currentTool)) {
-      dimensionMode = '3D';
-      document.getElementById('btn-2d').classList.remove('active');
-      document.getElementById('btn-3d').classList.add('active');
-    } else {
-      dimensionMode = '2D';
-      document.getElementById('btn-3d').classList.remove('active');
-      document.getElementById('btn-2d').classList.add('active');
-    }
   }
 
   function clearCanvas() {
+    // Clear 2D session
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     shapes2D.length = 0;
 
+    // Clear 3D session
     objects3D.forEach(obj => scene.remove(obj));
     objects3D.length = 0;
 
@@ -273,6 +279,7 @@ html_code = """
       scene.remove(previewMesh3D);
       previewMesh3D = null;
     }
+    renderer.clear();
   }
 
   function getDistance(p1, p2) {
@@ -359,18 +366,20 @@ html_code = """
   }
 
   function onResults(results) {
-    // 1. Clear 2D Canvas
+    // 1. Clear 2D Canvas Frame
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Render Mirrored Webcam Stream
+    // 2. Render Webcam Frame
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // 3. Render Completed 2D Shapes
-    shapes2D.forEach(renderSingle2DShape);
+    // 3. Render 2D Shapes ONLY when in 2D Mode
+    if (activeMode === '2D') {
+      shapes2D.forEach(renderSingle2DShape);
+    }
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
@@ -388,7 +397,7 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Palm Indicator
+      // Palm Landmark Indicator
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
@@ -401,13 +410,11 @@ html_code = """
       );
       const currentlyPinching = pinchDist < 50;
 
-      // Cursor Indicator
+      // Index Cursor Indicator
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
       ctx2D.fill();
-
-      const activeIs3D = is3DTool(currentTool);
 
       if (currentlyPinching) {
         if (!isPinching) {
@@ -415,11 +422,11 @@ html_code = """
           startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
-          statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
+          statusBar.innerText = `Gesture Status: Drawing [${activeMode}] (${currentTool.toUpperCase()})`;
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
 
-          if (activeIs3D) {
+          if (activeMode === '3D') {
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
             activeDrawnPath.push(currentPinchPoint);
@@ -435,9 +442,9 @@ html_code = """
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Released (Saved)";
+          statusBar.innerText = `Gesture Status: Saved [${activeMode}]`;
 
-          if (activeIs3D) {
+          if (activeMode === '3D') {
             finalize3DSolid();
           } else {
             shapes2D.push({
