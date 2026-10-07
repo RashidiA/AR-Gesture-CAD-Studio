@@ -198,13 +198,13 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js 3D Engine Setup
+  // Three.js Engine Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0); // Transparent WebGL canvas overlay
+  renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -231,8 +231,9 @@ html_code = """
   }
   animate3D();
 
-  function checkIs3D(tool) {
-    return ['cube', 'sphere', 'cone', 'extrude'].includes(tool.toLowerCase());
+  function is3DTool(tool) {
+    const t = tool.toLowerCase();
+    return t === 'cube' || t === 'sphere' || t === 'cone' || t === 'extrude';
   }
 
   function setDimensionMode(mode) {
@@ -240,21 +241,21 @@ html_code = """
     document.getElementById('btn-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-3d').classList.toggle('active', mode === '3D');
 
-    if (mode === '3D' && !checkIs3D(currentTool)) {
-      setTool('sphere');
-    } else if (mode === '2D' && checkIs3D(currentTool)) {
+    if (mode === '3D' && !is3DTool(currentTool)) {
+      setTool('cube');
+    } else if (mode === '2D' && is3DTool(currentTool)) {
       setTool('free');
     }
   }
 
   function setTool(tool) {
     currentTool = tool.toLowerCase();
+    
     document.querySelectorAll('.btn-grid button').forEach(btn => btn.classList.remove('active'));
-
     const activeBtn = document.getElementById(`btn-${currentTool}`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    if (checkIs3D(currentTool)) {
+    if (is3DTool(currentTool)) {
       dimensionMode = '3D';
       document.getElementById('btn-2d').classList.remove('active');
       document.getElementById('btn-3d').classList.add('active');
@@ -371,7 +372,7 @@ html_code = """
     // 1. Clear 2D Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Draw Mirrored Video Frame onto 2D Background Canvas
+    // 2. Render Webcam Feed
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
@@ -397,26 +398,26 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm Anchor Dot
+      // Draw Palm Dot
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Check Pinch Distance
+      // Pinch Check
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
       const currentlyPinching = pinchDist < 50;
 
-      // Cursor Visualizer
+      // Cursor Indicator
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      const is3D = checkIs3D(currentTool) || dimensionMode === '3D';
+      const is3DActive = (dimensionMode === '3D') || is3DTool(currentTool);
 
       if (currentlyPinching) {
         if (!isPinching) {
@@ -428,11 +429,9 @@ html_code = """
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
 
-          if (is3D) {
-            // Update 3D WebGL Mesh
+          if (is3DActive) {
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            // Update 2D Path
             activeDrawnPath.push(currentPinchPoint);
             renderSingle2DShape({
               type: currentTool,
@@ -448,7 +447,7 @@ html_code = """
           isPinching = false;
           statusBar.innerText = "Gesture Status: Released (Saved)";
 
-          if (is3D) {
+          if (is3DActive) {
             finalize3DSolid();
           } else {
             shapes2D.push({
