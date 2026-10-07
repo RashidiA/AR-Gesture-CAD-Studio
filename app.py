@@ -46,17 +46,18 @@ html_code = """
       width: 1100px;
       height: 650px;
     }
-    #2d-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
-    }
     #3d-canvas {
       position: absolute;
       top: 0;
       left: 0;
       z-index: 2;
+    }
+    #2d-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 3;
+      pointer-events: none;
     }
 
     #ui-panel {
@@ -139,8 +140,8 @@ html_code = """
 <div id="studio-container">
   <video id="webcam" playsinline></video>
   <div id="canvas-container">
-    <canvas id="2d-canvas" width="1100" height="650"></canvas>
     <canvas id="3d-canvas" width="1100" height="650"></canvas>
+    <canvas id="2d-canvas" width="1100" height="650"></canvas>
   </div>
 
   <div id="ui-panel">
@@ -197,7 +198,7 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js 3D Engine Setup
+  // --- Three.js 3D Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
@@ -205,17 +206,17 @@ html_code = """
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setSize(1100, 650);
 
-  // Lighting for solid red appearance
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  // Lighting to match solid shaded look
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambientLight);
-  
-  const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
-  dirLight1.position.set(300, 400, 500);
-  scene.add(dirLight1);
 
-  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-  dirLight2.position.set(-300, -200, 200);
-  scene.add(dirLight2);
+  const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  mainLight.position.set(200, 400, 500);
+  scene.add(mainLight);
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  fillLight.position.set(-200, -200, 300);
+  scene.add(fillLight);
 
   const objects3D = [];
   let previewMesh3D = null;
@@ -223,21 +224,25 @@ html_code = """
   function animate3D() {
     requestAnimationFrame(animate3D);
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.008;
-      obj.rotation.x += 0.004;
+      obj.rotation.y += 0.005;
+      obj.rotation.x += 0.002;
     });
     renderer.render(scene, camera);
   }
   animate3D();
 
+  function is3DTool(tool) {
+    return ['cube', 'sphere', 'cone', 'extrude'].includes(tool);
+  }
+
   function setDimensionMode(mode) {
     dimensionMode = mode;
     document.getElementById('btn-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-3d').classList.toggle('active', mode === '3D');
-    
-    if (mode === '3D' && ['free', 'rectangle', 'circle', 'triangle'].includes(currentTool)) {
+
+    if (mode === '3D' && !is3DTool(currentTool)) {
       setTool('cube');
-    } else if (mode === '2D' && ['cube', 'sphere', 'cone', 'extrude'].includes(currentTool)) {
+    } else if (mode === '2D' && is3DTool(currentTool)) {
       setTool('free');
     }
   }
@@ -245,11 +250,11 @@ html_code = """
   function setTool(tool) {
     currentTool = tool;
     document.querySelectorAll('.btn-grid button').forEach(btn => btn.classList.remove('active'));
-    
+
     const activeBtn = document.getElementById(`btn-${tool}`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    if (['cube', 'sphere', 'cone', 'extrude'].includes(tool)) {
+    if (is3DTool(tool)) {
       dimensionMode = '3D';
       document.getElementById('btn-2d').classList.remove('active');
       document.getElementById('btn-3d').classList.add('active');
@@ -263,8 +268,10 @@ html_code = """
   function clearCanvas() {
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     shapes2D.length = 0;
+    
     objects3D.forEach(obj => scene.remove(obj));
     objects3D.length = 0;
+
     if (previewMesh3D) {
       scene.remove(previewMesh3D);
       previewMesh3D = null;
@@ -273,6 +280,62 @@ html_code = """
 
   function getDistance(p1, p2) {
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+  }
+
+  function screenTo3D(pixelX, pixelY) {
+    const ndcX = (pixelX / 1100) * 2 - 1;
+    const ndcY = -(pixelY / 650) * 2 + 1;
+
+    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+    vector.unproject(camera);
+    const dir = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z;
+    return camera.position.clone().add(dir.multiplyScalar(distance));
+  }
+
+  function update3DPreview(start, end) {
+    const dist = getDistance(start, end);
+    const radius = Math.max(dist / 2, 15);
+
+    if (!previewMesh3D) {
+      let geometry;
+      if (currentTool === 'sphere') {
+        geometry = new THREE.SphereGeometry(1, 32, 32);
+      } else if (currentTool === 'cube' || currentTool === 'extrude') {
+        geometry = new THREE.BoxGeometry(2, 2, 2);
+      } else if (currentTool === 'cone') {
+        geometry = new THREE.ConeGeometry(1, 2, 32);
+      }
+
+      const material = new THREE.MeshStandardMaterial({
+        color: 0xbd0000,
+        roughness: 0.2,
+        metalness: 0.1
+      });
+
+      previewMesh3D = new THREE.Mesh(geometry, material);
+
+      if (currentTool !== 'sphere') {
+        previewMesh3D.rotation.x = Math.PI / 6;
+        previewMesh3D.rotation.y = Math.PI / 4;
+      }
+
+      scene.add(previewMesh3D);
+    }
+
+    previewMesh3D.scale.set(radius, radius, radius);
+
+    const centerX = (start.x + end.x) / 2;
+    const centerY = (start.y + end.y) / 2;
+    const pos3D = screenTo3D(centerX, centerY);
+    previewMesh3D.position.copy(pos3D);
+  }
+
+  function finalize3DSolid() {
+    if (previewMesh3D) {
+      objects3D.push(previewMesh3D);
+      previewMesh3D = null;
+    }
   }
 
   function renderSingle2DShape(shape) {
@@ -292,8 +355,8 @@ html_code = """
       const h = shape.end.y - shape.start.y;
       ctx2D.rect(shape.start.x, shape.start.y, w, h);
     } else if (shape.type === 'circle') {
-      const radius = Math.hypot(shape.end.x - shape.start.x, shape.end.y - shape.start.y);
-      ctx2D.arc(shape.start.x, shape.start.y, radius, 0, 2 * Math.PI);
+      const r = getDistance(shape.start, shape.end);
+      ctx2D.arc(shape.start.x, shape.start.y, r, 0, 2 * Math.PI);
     } else if (shape.type === 'triangle') {
       const topX = (shape.start.x + shape.end.x) / 2;
       ctx2D.moveTo(topX, shape.start.y);
@@ -304,75 +367,18 @@ html_code = """
     ctx2D.stroke();
   }
 
-  function screenTo3D(pixelX, pixelY) {
-    const ndcX = (pixelX / 1100) * 2 - 1;
-    const ndcY = -(pixelY / 650) * 2 + 1;
-
-    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
-    vector.unproject(camera);
-    const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
-    return camera.position.clone().add(dir.multiplyScalar(distance));
-  }
-
-  function update3DPreview(start, end) {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const size = Math.max(Math.hypot(dx, dy), 20);
-
-    if (!previewMesh3D) {
-      let geometry;
-      if (currentTool === 'cube' || currentTool === 'extrude') {
-        geometry = new THREE.BoxGeometry(1, 1, 1);
-      } else if (currentTool === 'sphere') {
-        geometry = new THREE.SphereGeometry(0.5, 32, 32);
-      } else if (currentTool === 'cone') {
-        geometry = new THREE.ConeGeometry(0.5, 1, 32);
-      }
-
-      const material = new THREE.MeshStandardMaterial({
-        color: 0xcc0000,
-        roughness: 0.3,
-        metalness: 0.1,
-        transparent: false
-      });
-
-      previewMesh3D = new THREE.Mesh(geometry, material);
-      
-      // Preset isometric orientation so cubes and cones display 3D depth
-      previewMesh3D.rotation.x = Math.PI / 6;
-      previewMesh3D.rotation.y = Math.PI / 4;
-
-      scene.add(previewMesh3D);
-    }
-
-    previewMesh3D.scale.set(size, size, size);
-
-    const centerX = (start.x + end.x) / 2;
-    const centerY = (start.y + end.y) / 2;
-    const pos3D = screenTo3D(centerX, centerY);
-    previewMesh3D.position.copy(pos3D);
-  }
-
-  function finalize3DSolid() {
-    if (previewMesh3D) {
-      objects3D.push(previewMesh3D);
-      previewMesh3D = null;
-    }
-  }
-
   function onResults(results) {
-    // 1. Clear 2D Canvas
+    // 1. Clear 2D Overlay Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Draw Mirrored Video Frame
+    // 2. Draw Webcam Feed to Canvas
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // 3. Render 2D Shapes ONLY
+    // 3. Render Completed 2D Shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -397,14 +403,14 @@ html_code = """
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Check Pinch
+      // Detect Pinch
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
       const currentlyPinching = pinchDist < 50;
 
-      // Draw Index Finger Cursor
+      // Cursor Indicator
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -420,11 +426,11 @@ html_code = """
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
 
-          if (dimensionMode === '3D') {
-            // Update live 3D preview mesh size and location
+          if (is3DTool(currentTool) || dimensionMode === '3D') {
+            // Render 3D mesh via WebGL canvas
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            // Update 2D line path
+            // Render 2D stroke preview
             activeDrawnPath.push(currentPinchPoint);
             renderSingle2DShape({
               type: currentTool,
@@ -438,9 +444,9 @@ html_code = """
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Released";
+          statusBar.innerText = "Gesture Status: Released (Saved)";
 
-          if (dimensionMode === '3D') {
+          if (is3DTool(currentTool) || dimensionMode === '3D') {
             finalize3DSolid();
           } else {
             shapes2D.push({
