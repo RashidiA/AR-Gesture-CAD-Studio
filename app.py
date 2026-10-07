@@ -154,7 +154,7 @@ html_code = """
     </div>
 
     <div class="ui-group">
-      <span class="ui-label">Drawing Tools</span>
+      <span class="ui-label">2D Drawing Tools</span>
       <div class="btn-grid">
         <button id="btn-free" class="active" onclick="setTool('free')">Freehand</button>
         <button id="btn-rectangle" onclick="setTool('rectangle')">Rectangle</button>
@@ -179,7 +179,7 @@ html_code = """
     </div>
   </div>
 
-  <div id="status-bar">Gesture Status: Initializing tracking...</div>
+  <div id="status-bar">Gesture Status: Ready</div>
 </div>
 
 <script>
@@ -198,7 +198,7 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js Setup
+  // Three.js 3D Engine Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
@@ -206,16 +206,17 @@ html_code = """
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setSize(1100, 650);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+  // Studio Lighting for Depth Highlights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  directionalLight.position.set(200, 300, 500);
-  scene.add(directionalLight);
+  
+  const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
+  dirLight1.position.set(300, 400, 500);
+  scene.add(dirLight1);
 
-  const gridHelper = new THREE.GridHelper(800, 20, 0x00b4d8, 0x444444);
-  gridHelper.rotation.x = Math.PI / 2;
-  gridHelper.visible = false;
-  scene.add(gridHelper);
+  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+  dirLight2.position.set(-300, -200, 200);
+  scene.add(dirLight2);
 
   const objects3D = [];
   let previewMesh3D = null;
@@ -223,8 +224,8 @@ html_code = """
   function animate3D() {
     requestAnimationFrame(animate3D);
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.01;
-      obj.rotation.x += 0.005;
+      obj.rotation.y += 0.008;
+      obj.rotation.x += 0.004;
     });
     renderer.render(scene, camera);
   }
@@ -234,7 +235,6 @@ html_code = """
     dimensionMode = mode;
     document.getElementById('btn-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-3d').classList.toggle('active', mode === '3D');
-    gridHelper.visible = (mode === '3D');
     
     if (mode === '3D' && ['free', 'rectangle', 'circle', 'triangle'].includes(currentTool)) {
       setTool('cube');
@@ -252,6 +252,8 @@ html_code = """
 
     if (['cube', 'sphere', 'cone', 'extrude'].includes(tool)) {
       setDimensionMode('3D');
+    } else {
+      setDimensionMode('2D');
     }
   }
 
@@ -313,35 +315,37 @@ html_code = """
   function update3DPreview(start, end) {
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
-    
-    const width = Math.max(dx, 60);
-    const height = Math.max(dy, 60);
-    const depth = Math.max(width, height);
+    const size = Math.max(Math.hypot(dx, dy), 30);
 
     if (!previewMesh3D) {
       let geometry;
       if (currentTool === 'cube' || currentTool === 'extrude') {
         geometry = new THREE.BoxGeometry(1, 1, 1);
       } else if (currentTool === 'sphere') {
-        geometry = new THREE.SphereGeometry(1, 32, 32);
+        geometry = new THREE.SphereGeometry(0.5, 32, 32);
       } else if (currentTool === 'cone') {
-        geometry = new THREE.ConeGeometry(1, 1, 32);
+        geometry = new THREE.ConeGeometry(0.5, 1, 32);
       }
 
       const material = new THREE.MeshStandardMaterial({
-        color: 0x00ff88,
-        wireframe: false,
+        color: 0xcc0000,
         roughness: 0.3,
-        metalness: 0.2,
+        metalness: 0.1,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.85
       });
 
       previewMesh3D = new THREE.Mesh(geometry, material);
+      
+      // Preset initial isometric tilt for genuine 3D perspective
+      previewMesh3D.rotation.x = Math.PI / 6;
+      previewMesh3D.rotation.y = Math.PI / 4;
+
       scene.add(previewMesh3D);
     }
 
-    previewMesh3D.scale.set(width, height, depth);
+    previewMesh3D.scale.set(size, size, size);
+
     const centerX = (start.x + end.x) / 2;
     const centerY = (start.y + end.y) / 2;
     const pos3D = screenTo3D(centerX, centerY);
@@ -351,24 +355,20 @@ html_code = """
   function finalize3DSolid() {
     if (previewMesh3D) {
       previewMesh3D.material.opacity = 1.0;
-      previewMesh3D.material.color.setHex(0x00b4d8);
       objects3D.push(previewMesh3D);
       previewMesh3D = null;
     }
   }
 
   function onResults(results) {
-    // 1. Clear Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Draw Video Frame (Isolated Transform)
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // 3. Render Stored 2D Shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -378,7 +378,6 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Coordinate alignment matching mirrored canvas plane
       const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
@@ -388,20 +387,17 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Render Palm Anchor Marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Pinch Distance Calculation
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
       const currentlyPinching = pinchDist < 50;
 
-      // Render Fingertip Cursor Marker
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
