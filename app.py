@@ -202,20 +202,21 @@ html_code = """
 
   // Three.js 3D Setup
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
+  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setSize(1100, 650);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
   directionalLight.position.set(200, 300, 500);
   scene.add(directionalLight);
 
   const gridHelper = new THREE.GridHelper(800, 20, 0x00b4d8, 0x444444);
   gridHelper.rotation.x = Math.PI / 2;
+  gridHelper.visible = false;
   scene.add(gridHelper);
 
   const objects3D = [];
@@ -224,7 +225,8 @@ html_code = """
   function animate3D() {
     requestAnimationFrame(animate3D);
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.005;
+      obj.rotation.y += 0.01;
+      obj.rotation.x += 0.005;
     });
     renderer.render(scene, camera);
   }
@@ -300,6 +302,7 @@ html_code = """
   }
 
   function screenTo3D(pixelX, pixelY) {
+    // Correct NDC conversion matching canvas space
     const ndcX = (pixelX / 1100) * 2 - 1;
     const ndcY = -(pixelY / 650) * 2 + 1;
 
@@ -313,8 +316,8 @@ html_code = """
   function update3DPreview(start, end) {
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
-    const width = Math.max(dx, 20);
-    const height = Math.max(dy, 20);
+    const width = Math.max(dx, 40);
+    const height = Math.max(dy, 40);
     const depth = Math.max(width, height);
 
     if (!previewMesh3D) {
@@ -322,9 +325,9 @@ html_code = """
       if (currentTool === 'cube' || currentTool === 'extrude') {
         geometry = new THREE.BoxGeometry(1, 1, 1);
       } else if (currentTool === 'sphere') {
-        geometry = new THREE.SphereGeometry(0.5, 32, 32);
+        geometry = new THREE.SphereGeometry(1, 32, 32);
       } else if (currentTool === 'cone') {
-        geometry = new THREE.ConeGeometry(0.5, 1, 32);
+        geometry = new THREE.ConeGeometry(1, 1, 32);
       }
 
       const material = new THREE.MeshStandardMaterial({
@@ -333,7 +336,7 @@ html_code = """
         roughness: 0.3,
         metalness: 0.2,
         transparent: true,
-        opacity: 0.85
+        opacity: 0.8
       });
 
       previewMesh3D = new THREE.Mesh(geometry, material);
@@ -373,13 +376,14 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      const canvasCursorX = indexTip.x * 1100;
+      // Mirror X coord explicitly to align physical hand movement with mirrored CSS canvas
+      const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
-      const canvasThumbX = thumbTip.x * 1100;
+      const canvasThumbX = (1 - thumbTip.x) * 1100;
       const canvasThumbY = thumbTip.y * 650;
 
-      const canvasPalmX = palmCenter.x * 1100;
+      const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
       // Draw Palm marker
