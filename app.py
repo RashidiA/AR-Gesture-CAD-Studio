@@ -46,18 +46,17 @@ html_code = """
       width: 1100px;
       height: 650px;
     }
+    /* Removed CSS scaleX(-1) to eliminate double-mirroring */
     #2d-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      transform: scaleX(-1);
       z-index: 1;
     }
     #3d-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      transform: scaleX(-1);
       z-index: 2;
       pointer-events: none;
     }
@@ -302,7 +301,6 @@ html_code = """
   }
 
   function screenTo3D(pixelX, pixelY) {
-    // Correct NDC conversion matching canvas space
     const ndcX = (pixelX / 1100) * 2 - 1;
     const ndcY = -(pixelY / 650) * 2 + 1;
 
@@ -363,10 +361,13 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Draw Video Feed
+    // Mirror ONLY the video stream horizontally onto the canvas
+    ctx2D.translate(canvas2D.width, 0);
+    ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
+    ctx2D.restore();
 
-    // Re-render saved 2D shapes
+    // Re-render saved 2D shapes in native canvas coordinates
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -376,14 +377,14 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Mirror X coord explicitly to align physical hand movement with mirrored CSS canvas
-      const canvasCursorX = (1 - indexTip.x) * 1100;
+      // Standard coordinate mapping (matches mirrored video feed natively)
+      const canvasCursorX = indexTip.x * 1100;
       const canvasCursorY = indexTip.y * 650;
 
-      const canvasThumbX = (1 - thumbTip.x) * 1100;
+      const canvasThumbX = thumbTip.x * 1100;
       const canvasThumbY = thumbTip.y * 650;
 
-      const canvasPalmX = (1 - palmCenter.x) * 1100;
+      const canvasPalmX = palmCenter.x * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
       // Draw Palm marker
@@ -449,8 +450,6 @@ html_code = """
     } else {
       statusBar.innerText = "Gesture Status: Looking for hand...";
     }
-
-    ctx2D.restore();
   }
 
   const hands = new Hands({
