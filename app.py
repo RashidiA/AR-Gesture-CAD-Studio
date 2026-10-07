@@ -1,15 +1,22 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="AR Gesture CAD Studio", layout="wide")
+st.set_page_config(
+    page_title="AR Gesture CAD Studio", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 st.title("🎨 AR Gesture CAD Studio (2D & 3D)")
-st.caption("Edge-Computed WebAssembly Tracking (MediaPipe Hands) + WebGL 3D Engine (Three.js)")
+st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D Parametric CAD Engine (Three.js)")
 
 html_code = """
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
+  <title>AR Gesture CAD Studio</title>
+
   <!-- MediaPipe Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
@@ -18,23 +25,28 @@ html_code = """
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
     body {
       margin: 0;
       padding: 0;
-      background-color: #121212;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0d0f12;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
-      color: #ffffff;
+      color: #e2e8f0;
     }
     #studio-container {
       position: relative;
       width: 1100px;
       height: 650px;
       margin: 0 auto;
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      background: #1a1a1a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      background: #111827;
     }
     video {
       display: none;
@@ -62,33 +74,34 @@ html_code = """
 
     #ui-panel {
       position: absolute;
-      top: 15px;
-      left: 15px;
+      top: 20px;
+      left: 20px;
       z-index: 10;
-      background: rgba(30, 30, 30, 0.85);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 12px;
-      border-radius: 10px;
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 16px;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      width: 220px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      gap: 14px;
+      width: 240px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
 
     .ui-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
     }
 
     .ui-label {
-      font-size: 11px;
-      font-weight: bold;
+      font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
-      color: #00b4d8;
-      letter-spacing: 1px;
+      color: #38bdf8;
+      letter-spacing: 1.2px;
     }
 
     .btn-grid {
@@ -98,40 +111,86 @@ html_code = """
     }
 
     button {
-      background: #2b2b2b;
-      color: #fff;
-      border: 1px solid #444;
-      padding: 8px;
-      border-radius: 6px;
+      background: #1f2937;
+      color: #9ca3af;
+      border: 1px solid #374151;
+      padding: 8px 10px;
+      border-radius: 8px;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
       transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
 
     button:hover {
-      background: #00b4d8;
-      border-color: #00b4d8;
-      color: #000;
+      background: #374151;
+      color: #ffffff;
+      border-color: #4b5563;
     }
 
     button.active {
-      background: #00ff88 !important;
-      border-color: #00ff88 !important;
-      color: #000 !important;
+      background: #0284c7 !important;
+      border-color: #38bdf8 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    #btn-clear {
+      background: rgba(225, 29, 72, 0.15);
+      border: 1px solid rgba(225, 29, 72, 0.4);
+      color: #fecdd3;
+    }
+    #btn-clear:hover {
+      background: #e11d48;
+      color: white;
     }
 
     #status-bar {
       position: absolute;
-      bottom: 15px;
-      left: 15px;
+      bottom: 20px;
+      left: 20px;
       z-index: 10;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 8px 15px;
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 16px;
       border-radius: 20px;
-      font-size: 13px;
-      font-weight: bold;
-      color: #00ff88;
+      font-size: 12px;
+      font-weight: 600;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e11d48;
+    }
+    .status-dot.active {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    #pinch-indicator {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
     }
   </style>
 </head>
@@ -146,15 +205,15 @@ html_code = """
 
   <div id="ui-panel">
     <div class="ui-group">
-      <span class="ui-label">Select Mode</span>
+      <span class="ui-label">Mode Selection</span>
       <div class="btn-grid">
-        <button id="btn-mode-2d" class="active" onclick="switchMode('2D')">2D Mode</button>
-        <button id="btn-mode-3d" onclick="switchMode('3D')">3D Mode</button>
+        <button id="btn-mode-2d" class="active" onclick="switchMode('2D')">2D Canvas</button>
+        <button id="btn-mode-3d" onclick="switchMode('3D')">3D Engine</button>
       </div>
     </div>
 
     <div class="ui-group" id="group-2d-tools">
-      <span class="ui-label">2D Drawing Tools</span>
+      <span class="ui-label">2D Sketching</span>
       <div class="btn-grid">
         <button id="btn-free" class="active" onclick="setTool('free')">Freehand</button>
         <button id="btn-rectangle" onclick="setTool('rectangle')">Rectangle</button>
@@ -164,22 +223,27 @@ html_code = """
     </div>
 
     <div class="ui-group" id="group-3d-tools" style="display: none;">
-      <span class="ui-label">3D Primitives</span>
+      <span class="ui-label">3D Primitives & CAD</span>
       <div class="btn-grid">
-        <button id="btn-cube" onclick="setTool('cube')">Cube</button>
         <button id="btn-sphere" onclick="setTool('sphere')">Sphere</button>
+        <button id="btn-cube" onclick="setTool('cube')">Cube</button>
         <button id="btn-cone" onclick="setTool('cone')">Cone</button>
         <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
       </div>
     </div>
 
     <div class="ui-group">
-      <span class="ui-label">Canvas Actions</span>
-      <button onclick="clearCanvas()" style="background: #e63946; border: none; color: white;">Clear Canvas</button>
+      <span class="ui-label">Controls</span>
+      <button id="btn-clear" onclick="clearCanvas()">Clear All Shapes</button>
     </div>
   </div>
 
-  <div id="status-bar">Gesture Status: Ready</div>
+  <div id="status-bar">
+    <div id="status-dot" class="status-dot"></div>
+    <span id="status-text">Initializing Camera...</span>
+  </div>
+
+  <div id="pinch-indicator">Pinch Distance: --</div>
 </div>
 
 <script>
@@ -187,7 +251,9 @@ html_code = """
   const canvas2D = document.getElementById('2d-canvas');
   const ctx2D = canvas2D.getContext('2d');
   const canvas3D = document.getElementById('3d-canvas');
-  const statusBar = document.getElementById('status-bar');
+  const statusBarText = document.getElementById('status-text');
+  const statusDot = document.getElementById('status-dot');
+  const pinchIndicator = document.getElementById('pinch-indicator');
 
   let activeMode = '2D';
   let currentTool = 'free';
@@ -196,9 +262,13 @@ html_code = """
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
+  // Smooth position tracking
+  let smoothedCursor = { x: 0, y: 0 };
+  const alpha = 0.35; // Exponential Moving Average smoothing factor
+
   const shapes2D = [];
 
-  // Three.js Engine Setup
+  // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
   camera.position.set(0, 0, 800);
@@ -206,31 +276,43 @@ html_code = """
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
+  renderer.shadowMap.enabled = true;
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+  // Scene Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
   mainLight.position.set(200, 400, 500);
   scene.add(mainLight);
+
+  const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.5);
+  fillLight.position.set(-200, -200, 300);
+  scene.add(fillLight);
+
+  // Background Grid Helper
+  const gridHelper = new THREE.GridHelper(1000, 20, 0x38bdf8, 0x1f2937);
+  gridHelper.rotation.x = Math.PI / 2;
+  gridHelper.position.z = -200;
+  scene.add(gridHelper);
 
   const objects3D = [];
   let previewMesh3D = null;
 
   function animate3D() {
     requestAnimationFrame(animate3D);
-    if (activeMode === '3D') {
-      objects3D.forEach(obj => {
-        obj.rotation.y += 0.01;
-        obj.rotation.x += 0.005;
-      });
-      if (previewMesh3D) {
-        previewMesh3D.rotation.y += 0.01;
-      }
-      renderer.render(scene, camera);
-    } else {
-      renderer.clear();
+    
+    // Rotate generated 3D primitives smoothly
+    objects3D.forEach(obj => {
+      obj.rotation.y += 0.008;
+      obj.rotation.x += 0.004;
+    });
+
+    if (previewMesh3D) {
+      previewMesh3D.rotation.y += 0.01;
     }
+
+    renderer.render(scene, camera);
   }
   animate3D();
 
@@ -273,7 +355,6 @@ html_code = """
       scene.remove(previewMesh3D);
       previewMesh3D = null;
     }
-    renderer.clear();
   }
 
   function getDistance(p1, p2) {
@@ -286,23 +367,45 @@ html_code = """
     return new THREE.Vector3(worldX, worldY, 0);
   }
 
-  function createMeshForTool(tool) {
+  // --- Real-Time Mesh Creation Engine ---
+  function createMeshForTool(tool, pathData = null) {
     let geometry;
+
     if (tool === 'sphere') {
-      geometry = new THREE.SphereGeometry(1, 24, 24);
-    } else if (tool === 'cube' || tool === 'extrude') {
-      geometry = new THREE.BoxGeometry(2, 2, 2);
+      geometry = new THREE.SphereGeometry(1, 32, 32);
+    } else if (tool === 'cube') {
+      geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
     } else if (tool === 'cone') {
-      geometry = new THREE.ConeGeometry(1, 2, 24);
+      geometry = new THREE.ConeGeometry(1, 2, 32);
+    } else if (tool === 'extrude' && pathData && pathData.length > 2) {
+      // Convert 2D path into THREE.Shape for true CAD Extrusion
+      const shape = new THREE.Shape();
+      const startPos = mapScreenTo3DWorld(pathData[0].x, pathData[0].y);
+      shape.moveTo(startPos.x / 50, startPos.y / 50);
+
+      for (let i = 1; i < pathData.length; i++) {
+        const pt = mapScreenTo3DWorld(pathData[i].x, pathData[i].y);
+        shape.lineTo(pt.x / 50, pt.y / 50);
+      }
+      shape.closePath();
+
+      const extrudeSettings = {
+        steps: 1,
+        depth: 2,
+        bevelEnabled: true,
+        bevelThickness: 0.2,
+        bevelSize: 0.2,
+        bevelSegments: 3
+      };
+      geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     } else {
-      geometry = new THREE.SphereGeometry(1, 24, 24);
+      geometry = new THREE.SphereGeometry(1, 32, 32);
     }
 
-    const material = new THREE.MeshPhongMaterial({
-      color: 0x00ff88,
-      emissive: 0x003311,
-      specular: 0xffffff,
-      shininess: 100,
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      roughness: 0.3,
+      metalness: 0.2,
       side: THREE.DoubleSide
     });
 
@@ -311,19 +414,25 @@ html_code = """
 
   function update3DPreview(start, end) {
     const dragDistance = getDistance(start, end);
-    const size = Math.max(dragDistance * 0.8, 40);
-
-    if (!previewMesh3D) {
-      previewMesh3D = createMeshForTool(currentTool);
-      scene.add(previewMesh3D);
+    
+    if (currentTool === 'extrude') {
+      if (activeDrawnPath.length > 3) {
+        if (previewMesh3D) scene.remove(previewMesh3D);
+        previewMesh3D = createMeshForTool('extrude', activeDrawnPath);
+        previewMesh3D.scale.set(40, 40, 40);
+        scene.add(previewMesh3D);
+      }
+    } else {
+      const size = Math.max(dragDistance * 0.8, 30);
+      if (!previewMesh3D) {
+        previewMesh3D = createMeshForTool(currentTool);
+        scene.add(previewMesh3D);
+      }
+      previewMesh3D.scale.set(size, size, size);
+      const centerX = (start.x + end.x) / 2;
+      const centerY = (start.y + end.y) / 2;
+      previewMesh3D.position.copy(mapScreenTo3DWorld(centerX, centerY));
     }
-
-    previewMesh3D.scale.set(size, size, size);
-
-    const centerX = (start.x + end.x) / 2;
-    const centerY = (start.y + end.y) / 2;
-    const pos3D = mapScreenTo3DWorld(centerX, centerY);
-    previewMesh3D.position.copy(pos3D);
   }
 
   function finalize3DSolid() {
@@ -336,11 +445,13 @@ html_code = """
   function renderSingle2DShape(shape) {
     if (!shape.start || !shape.end) return;
 
-    ctx2D.strokeStyle = shape.color || '#00ff88';
+    ctx2D.strokeStyle = shape.color || '#38bdf8';
     ctx2D.lineWidth = 4;
+    ctx2D.lineCap = 'round';
+    ctx2D.lineJoin = 'round';
     ctx2D.beginPath();
 
-    if (shape.type === 'free') {
+    if (shape.type === 'free' || shape.type === 'extrude') {
       if (shape.path && shape.path.length > 0) {
         ctx2D.moveTo(shape.path[0].x, shape.path[0].y);
         shape.path.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
@@ -363,77 +474,80 @@ html_code = """
   }
 
   function onResults(results) {
+    // Clear & draw mirrored video frame
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
+    // Render 2D Shapes on top of camera feed
     if (activeMode === '2D') {
       shapes2D.forEach(renderSingle2DShape);
     }
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      statusDot.classList.add('active');
       const landmarks = results.multiHandLandmarks[0];
 
       const thumbTip = landmarks[4];
       const indexTip = landmarks[8];
-      const palmCenter = landmarks[9];
 
-      const canvasCursorX = (1 - indexTip.x) * 1100;
-      const canvasCursorY = indexTip.y * 650;
+      // Calculate mirrored coordinates
+      const rawCursorX = (1 - indexTip.x) * 1100;
+      const rawCursorY = indexTip.y * 650;
+      const rawThumbX = (1 - thumbTip.x) * 1100;
+      const rawThumbY = thumbTip.y * 650;
 
-      const canvasThumbX = (1 - thumbTip.x) * 1100;
-      const canvasThumbY = thumbTip.y * 650;
-
-      const canvasPalmX = (1 - palmCenter.x) * 1100;
-      const canvasPalmY = palmCenter.y * 650;
-
-      ctx2D.fillStyle = '#ff0055';
-      ctx2D.beginPath();
-      ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
-      ctx2D.fill();
+      // Position Exponential Smoothing
+      smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
+      smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
       const pinchDist = getDistance(
-        { x: canvasCursorX, y: canvasCursorY },
-        { x: canvasThumbX, y: canvasThumbY }
+        { x: rawCursorX, y: rawCursorY },
+        { x: rawThumbX, y: rawThumbY }
       );
-      const currentlyPinching = pinchDist < 50;
 
-      ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
+      pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
+      const currentlyPinching = pinchDist < 45;
+
+      // Draw Cursor Indicator
+      ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
+      ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
+      ctx2D.shadowBlur = 10;
       ctx2D.beginPath();
-      ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
+      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 8, 0, 2 * Math.PI);
       ctx2D.fill();
+      ctx2D.shadowBlur = 0; // reset blur
 
       if (currentlyPinching) {
         if (!isPinching) {
           isPinching = true;
-          startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
-          currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
-          activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
-          statusBar.innerText = `Gesture Status: Drawing [${activeMode}] (${currentTool.toUpperCase()})`;
+          startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          activeDrawnPath = [{ x: smoothedCursor.x, y: smoothedCursor.y }];
+          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
         } else {
-          currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
+          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          activeDrawnPath.push(currentPinchPoint);
 
           if (activeMode === '3D') {
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            activeDrawnPath.push(currentPinchPoint);
             renderSingle2DShape({
               type: currentTool,
               start: startPinchPoint,
               end: currentPinchPoint,
               path: activeDrawnPath,
-              color: '#00ff88'
+              color: '#10b981'
             });
           }
         }
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = `Gesture Status: Saved [${activeMode}]`;
+          statusBarText.innerText = `Tracking Active (${activeMode})`;
 
           if (activeMode === '3D') {
             finalize3DSolid();
@@ -443,16 +557,19 @@ html_code = """
               start: { ...startPinchPoint },
               end: { ...currentPinchPoint },
               path: [...activeDrawnPath],
-              color: '#00ff88'
+              color: '#38bdf8'
             });
           }
         }
       }
     } else {
-      statusBar.innerText = "Gesture Status: Searching for hand...";
+      statusDot.classList.remove('active');
+      statusBarText.innerText = "Searching for hand...";
+      pinchIndicator.innerText = "Pinch Distance: --";
     }
   }
 
+  // --- Initialize MediaPipe Tracking ---
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
@@ -460,8 +577,8 @@ html_code = """
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.65
   });
 
   hands.onResults(onResults);
@@ -474,7 +591,12 @@ html_code = """
     height: 650
   });
 
-  cameraMedia.start();
+  cameraMedia.start().then(() => {
+    statusBarText.innerText = "Tracking Active (2D)";
+  }).catch((err) => {
+    statusBarText.innerText = "Camera Access Denied/Failed";
+    console.error(err);
+  });
 </script>
 
 </body>
