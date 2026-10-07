@@ -46,17 +46,17 @@ html_code = """
       width: 1100px;
       height: 650px;
     }
+    #2d-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
     #3d-canvas {
       position: absolute;
       top: 0;
       left: 0;
       z-index: 2;
-    }
-    #2d-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 3;
       pointer-events: none;
     }
 
@@ -140,8 +140,8 @@ html_code = """
 <div id="studio-container">
   <video id="webcam" playsinline></video>
   <div id="canvas-container">
-    <canvas id="3d-canvas" width="1100" height="650"></canvas>
     <canvas id="2d-canvas" width="1100" height="650"></canvas>
+    <canvas id="3d-canvas" width="1100" height="650"></canvas>
   </div>
 
   <div id="ui-panel">
@@ -203,11 +203,12 @@ html_code = """
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
 
+  // Set alpha: true so webcam feed shows behind WebGL meshes
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
+  renderer.setClearColor(0x000000, 0); // Completely transparent background
   renderer.setSize(1100, 650);
 
-  // Lighting to match solid shaded look
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
   const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -368,17 +369,17 @@ html_code = """
   }
 
   function onResults(results) {
-    // 1. Clear 2D Overlay Canvas
+    // 1. Always clear 2D Overlay
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
-    // 2. Draw Webcam Feed to Canvas
+    // 2. Always draw webcam video feed onto 2D background canvas
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // 3. Render Completed 2D Shapes
+    // 3. Render all existing 2D shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -397,7 +398,7 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm Anchor
+      // Palm Anchor
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
@@ -410,7 +411,7 @@ html_code = """
       );
       const currentlyPinching = pinchDist < 50;
 
-      // Cursor Indicator
+      // Finger Cursor
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -427,10 +428,8 @@ html_code = """
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
 
           if (is3DTool(currentTool) || dimensionMode === '3D') {
-            // Render 3D mesh via WebGL canvas
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            // Render 2D stroke preview
             activeDrawnPath.push(currentPinchPoint);
             renderSingle2DShape({
               type: currentTool,
