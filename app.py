@@ -198,7 +198,6 @@ html_code = """
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
-  // Persistent 2D Storage
   const shapes2D = [];
 
   // Three.js 3D Setup
@@ -268,10 +267,9 @@ html_code = """
   }
 
   function getDistance(p1, p2) {
-    return Math.hypot((p1.x - p2.x) * 1100, (p1.y - p2.y) * 650);
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
   }
 
-  // Draw any 2D shape object onto the 2D canvas context
   function renderSingle2DShape(shape) {
     ctx2D.strokeStyle = shape.color || '#00ff88';
     ctx2D.lineWidth = 4;
@@ -358,10 +356,10 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Draw Video Feed
+    // Video background
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
 
-    // Re-render ALL saved 2D drawings so they don't disappear
+    // Re-render saved 2D shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -371,23 +369,30 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      const canvasCursorX = indexTip.x * 1100;
+      // Invert X-axis calculation to align with CSS scaleX(-1) mirroring
+      const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
-      const canvasPalmX = palmCenter.x * 1100;
+      const canvasThumbX = (1 - thumbTip.x) * 1100;
+      const canvasThumbY = thumbTip.y * 650;
+
+      const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Palm marker
+      // Draw Palm marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Check Pinch
-      const pinchDist = getDistance(indexTip, thumbTip);
+      // Check Pinch distance in screen pixels
+      const pinchDist = getDistance(
+        { x: canvasCursorX, y: canvasCursorY },
+        { x: canvasThumbX, y: canvasThumbY }
+      );
       const currentlyPinching = pinchDist < 55;
 
-      // Index cursor marker
+      // Fingertip cursor dot
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -399,7 +404,7 @@ html_code = """
           startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
-          statusBar.innerText = `Gesture Status: Drawing/Pinching (${currentTool.toUpperCase()})`;
+          statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath.push(currentPinchPoint);
@@ -407,7 +412,6 @@ html_code = """
           if (dimensionMode === '3D') {
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            // Live 2D shape drawing preview
             renderSingle2DShape({
               type: currentTool,
               start: startPinchPoint,
@@ -420,12 +424,11 @@ html_code = """
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Pinch Released (Shape Saved)";
+          statusBar.innerText = "Gesture Status: Pinch Released (Saved)";
 
           if (dimensionMode === '3D') {
             finalize3DSolid();
           } else {
-            // Save completed 2D shape into permanent array
             shapes2D.push({
               type: currentTool,
               start: startPinchPoint,
