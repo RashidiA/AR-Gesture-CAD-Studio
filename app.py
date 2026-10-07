@@ -57,7 +57,6 @@ html_code = """
       top: 0;
       left: 0;
       z-index: 2;
-      pointer-events: none;
     }
 
     #ui-panel {
@@ -206,7 +205,7 @@ html_code = """
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setSize(1100, 650);
 
-  // Studio Lighting for Depth Highlights
+  // Lighting for solid red appearance
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
   
@@ -251,9 +250,13 @@ html_code = """
     if (activeBtn) activeBtn.classList.add('active');
 
     if (['cube', 'sphere', 'cone', 'extrude'].includes(tool)) {
-      setDimensionMode('3D');
+      dimensionMode = '3D';
+      document.getElementById('btn-2d').classList.remove('active');
+      document.getElementById('btn-3d').classList.add('active');
     } else {
-      setDimensionMode('2D');
+      dimensionMode = '2D';
+      document.getElementById('btn-3d').classList.remove('active');
+      document.getElementById('btn-2d').classList.add('active');
     }
   }
 
@@ -313,9 +316,9 @@ html_code = """
   }
 
   function update3DPreview(start, end) {
-    const dx = Math.abs(end.x - start.x);
-    const dy = Math.abs(end.y - start.y);
-    const size = Math.max(Math.hypot(dx, dy), 30);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const size = Math.max(Math.hypot(dx, dy), 20);
 
     if (!previewMesh3D) {
       let geometry;
@@ -331,13 +334,12 @@ html_code = """
         color: 0xcc0000,
         roughness: 0.3,
         metalness: 0.1,
-        transparent: true,
-        opacity: 0.85
+        transparent: false
       });
 
       previewMesh3D = new THREE.Mesh(geometry, material);
       
-      // Preset initial isometric tilt for genuine 3D perspective
+      // Preset isometric orientation so cubes and cones display 3D depth
       previewMesh3D.rotation.x = Math.PI / 6;
       previewMesh3D.rotation.y = Math.PI / 4;
 
@@ -354,21 +356,23 @@ html_code = """
 
   function finalize3DSolid() {
     if (previewMesh3D) {
-      previewMesh3D.material.opacity = 1.0;
       objects3D.push(previewMesh3D);
       previewMesh3D = null;
     }
   }
 
   function onResults(results) {
+    // 1. Clear 2D Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
 
+    // 2. Draw Mirrored Video Frame
     ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
+    // 3. Render 2D Shapes ONLY
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -387,17 +391,20 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
+      // Draw Palm Anchor
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
+      // Check Pinch
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
       const currentlyPinching = pinchDist < 50;
 
+      // Draw Index Finger Cursor
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -412,11 +419,13 @@ html_code = """
           statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
-          activeDrawnPath.push(currentPinchPoint);
 
           if (dimensionMode === '3D') {
+            // Update live 3D preview mesh size and location
             update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
+            // Update 2D line path
+            activeDrawnPath.push(currentPinchPoint);
             renderSingle2DShape({
               type: currentTool,
               start: startPinchPoint,
@@ -429,7 +438,7 @@ html_code = """
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Pinch Released (Saved)";
+          statusBar.innerText = "Gesture Status: Released";
 
           if (dimensionMode === '3D') {
             finalize3DSolid();
