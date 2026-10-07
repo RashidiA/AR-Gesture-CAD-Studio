@@ -54,11 +54,12 @@ html_code = """
       transform: scaleX(-1);
       z-index: 1;
     }
-    /* WebGL Three.js Overlay */
+    /* WebGL Three.js Overlay mirrored to stay synchronous with video */
     #3d-canvas {
       position: absolute;
       top: 0;
       left: 0;
+      transform: scaleX(-1);
       z-index: 2;
       pointer-events: none;
     }
@@ -269,10 +270,10 @@ html_code = """
     return Math.hypot((p1.x - p2.x) * 1100, (p1.y - p2.y) * 650);
   }
 
-  function screenTo3D(screenX, screenY, zDepth = 0) {
-    // Correct horizontal alignment for Three.js coordinates
-    const x = screenX - 550;
-    const y = -(screenY - 325);
+  function canvasTo3D(canvasX, canvasY, zDepth = 0) {
+    // Aligns 3D projections directly with mirrored canvas pixels
+    const x = canvasX - 550;
+    const y = -(canvasY - 325);
     return new THREE.Vector3(x, y, zDepth);
   }
 
@@ -298,7 +299,7 @@ html_code = """
 
     if (geometry) {
       const mesh = new THREE.Mesh(geometry, material);
-      const pos = screenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2, 0);
+      const pos = canvasTo3D((start.x + end.x) / 2, (start.y + end.y) / 2, 0);
       mesh.position.copy(pos);
       scene.add(mesh);
       objects3D.push(mesh);
@@ -309,11 +310,11 @@ html_code = """
     if (activeDrawnPath.length < 3) return;
 
     const shape = new THREE.Shape();
-    const firstPos = screenTo3D(activeDrawnPath[0].x, activeDrawnPath[0].y);
+    const firstPos = canvasTo3D(activeDrawnPath[0].x, activeDrawnPath[0].y);
     shape.moveTo(firstPos.x, firstPos.y);
 
     for (let i = 1; i < activeDrawnPath.length; i++) {
-      const pos = screenTo3D(activeDrawnPath[i].x, activeDrawnPath[i].y);
+      const pos = canvasTo3D(activeDrawnPath[i].x, activeDrawnPath[i].y);
       shape.lineTo(pos.x, pos.y);
     }
 
@@ -340,16 +341,12 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Native coordinates matching mirrored canvas
+      // Direct canvas coordinates synchronized with mirrored elements
       const canvasCursorX = indexTip.x * 1100;
       const canvasCursorY = indexTip.y * 650;
 
       const canvasPalmX = palmCenter.x * 1100;
       const canvasPalmY = palmCenter.y * 650;
-
-      // Screen-mapped coordinates (Un-mirrored) for 3D calculations
-      const screenCursorX = (1 - indexTip.x) * 1100;
-      const screenCursorY = indexTip.y * 650;
 
       // Draw Red Palm Anchor Marker
       ctx2D.fillStyle = '#ff0055';
@@ -372,12 +369,12 @@ html_code = """
         if (!isPinching) {
           // Pinch Started
           isPinching = true;
-          startPinchPoint = { x: screenCursorX, y: screenCursorY, canvasX: canvasCursorX, canvasY: canvasCursorY };
-          activeDrawnPath = [{ x: screenCursorX, y: screenCursorY }];
+          startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
+          activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
           statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
         } else {
           // Continuous Pinch Drag
-          currentPinchPoint = { x: screenCursorX, y: screenCursorY, canvasX: canvasCursorX, canvasY: canvasCursorY };
+          currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath.push(currentPinchPoint);
 
           // Real-time 2D Preview Drawing
@@ -385,15 +382,15 @@ html_code = """
             ctx2D.strokeStyle = '#00ff88';
             ctx2D.lineWidth = 4;
             ctx2D.beginPath();
-            ctx2D.moveTo(startPinchPoint.canvasX, startPinchPoint.canvasY);
+            ctx2D.moveTo(startPinchPoint.x, startPinchPoint.y);
 
             if (currentTool === 'free') {
-              activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.canvasX || pt.x, pt.canvasY || pt.y));
+              activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
             } else if (currentTool === 'rectangle') {
-              ctx2D.strokeRect(startPinchPoint.canvasX, startPinchPoint.canvasY, currentPinchPoint.canvasX - startPinchPoint.canvasX, currentPinchPoint.canvasY - startPinchPoint.canvasY);
+              ctx2D.strokeRect(startPinchPoint.x, startPinchPoint.y, currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
             } else if (currentTool === 'circle') {
-              const radius = Math.hypot(currentPinchPoint.canvasX - startPinchPoint.canvasX, currentPinchPoint.canvasY - startPinchPoint.canvasY);
-              ctx2D.arc(startPinchPoint.canvasX, startPinchPoint.canvasY, radius, 0, 2 * Math.PI);
+              const radius = Math.hypot(currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
+              ctx2D.arc(startPinchPoint.x, startPinchPoint.y, radius, 0, 2 * Math.PI);
             }
             ctx2D.stroke();
           }
