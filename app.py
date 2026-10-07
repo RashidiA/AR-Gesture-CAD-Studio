@@ -356,7 +356,7 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Video background
+    // Draw Video Feed
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
 
     // Re-render saved 2D shapes
@@ -369,14 +369,14 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Invert X-axis calculation to align with CSS scaleX(-1) mirroring
-      const canvasCursorX = (1 - indexTip.x) * 1100;
+      // Native coordinates mapped directly (CSS scaleX(-1) handles visual mirror)
+      const canvasCursorX = indexTip.x * 1100;
       const canvasCursorY = indexTip.y * 650;
 
-      const canvasThumbX = (1 - thumbTip.x) * 1100;
+      const canvasThumbX = thumbTip.x * 1100;
       const canvasThumbY = thumbTip.y * 650;
 
-      const canvasPalmX = (1 - palmCenter.x) * 1100;
+      const canvasPalmX = palmCenter.x * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
       // Draw Palm marker
@@ -385,14 +385,14 @@ html_code = """
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Check Pinch distance in screen pixels
+      // Check Pinch distance
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
       const currentlyPinching = pinchDist < 55;
 
-      // Fingertip cursor dot
+      // Fingertip tracking dot directly over index tip
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
