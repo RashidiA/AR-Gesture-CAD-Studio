@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="AR 3D Hand Drawing Studio", layout="wide")
+st.set_page_config(page_title="AR Gesture CAD Studio", layout="wide")
 
 st.title("🎨 AR Gesture CAD Studio (2D & 3D)")
-st.caption("Edge-Computed WebAssembly Tracking (MediaPipe Hands) + WebGL 3D Rendering Engine (Three.js)")
+st.caption("Edge-Computed WebAssembly Tracking (MediaPipe Hands) + WebGL 3D Engine (Three.js)")
 
 html_code = """
 <!DOCTYPE html>
@@ -179,7 +179,7 @@ html_code = """
     </div>
   </div>
 
-  <div id="status-bar">Gesture Status: Ready (Pinch Index & Thumb to Draw/Place)</div>
+  <div id="status-bar">Gesture Status: Initializing tracking...</div>
 </div>
 
 <script>
@@ -198,7 +198,7 @@ html_code = """
 
   const shapes2D = [];
 
-  // Three.js 3D Setup
+  // Three.js Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 3000);
   camera.position.set(0, 0, 800);
@@ -299,7 +299,6 @@ html_code = """
     ctx2D.stroke();
   }
 
-  // Fixed 3D Screen Projection
   function screenTo3D(pixelX, pixelY) {
     const ndcX = (pixelX / 1100) * 2 - 1;
     const ndcY = -(pixelY / 650) * 2 + 1;
@@ -307,8 +306,6 @@ html_code = """
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
     const dir = vector.sub(camera.position).normalize();
-    
-    // Project ray onto world plane Z = 0
     const distance = -camera.position.z / dir.z;
     return camera.position.clone().add(dir.multiplyScalar(distance));
   }
@@ -317,7 +314,6 @@ html_code = """
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
     
-    // Set minimal scale threshold to ensure visibility when pinch starts
     const width = Math.max(dx, 60);
     const height = Math.max(dy, 60);
     const depth = Math.max(width, height);
@@ -362,16 +358,17 @@ html_code = """
   }
 
   function onResults(results) {
-    ctx2D.save();
+    // 1. Clear Canvas
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-    
-    // Draw mirrored video feed onto canvas
+
+    // 2. Draw Video Frame (Isolated Transform)
+    ctx2D.save();
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // Re-render saved 2D shapes
+    // 3. Render Stored 2D Shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -381,7 +378,7 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Standard coordinate mapping synced with mirrored frame
+      // Coordinate alignment matching mirrored canvas plane
       const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
@@ -391,20 +388,20 @@ html_code = """
       const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm marker
+      // Render Palm Anchor Marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Check Pinch distance
+      // Pinch Distance Calculation
       const pinchDist = getDistance(
         { x: canvasCursorX, y: canvasCursorY },
         { x: canvasThumbX, y: canvasThumbY }
       );
-      const currentlyPinching = pinchDist < 55;
+      const currentlyPinching = pinchDist < 50;
 
-      // Fingertip tracking dot directly over index tip
+      // Render Fingertip Cursor Marker
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -452,7 +449,7 @@ html_code = """
         }
       }
     } else {
-      statusBar.innerText = "Gesture Status: Looking for hand...";
+      statusBar.innerText = "Gesture Status: Searching for hand...";
     }
   }
 
