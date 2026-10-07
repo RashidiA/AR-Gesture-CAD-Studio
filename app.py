@@ -299,6 +299,7 @@ html_code = """
     ctx2D.stroke();
   }
 
+  // Fixed 3D Screen Projection
   function screenTo3D(pixelX, pixelY) {
     const ndcX = (pixelX / 1100) * 2 - 1;
     const ndcY = -(pixelY / 650) * 2 + 1;
@@ -306,15 +307,19 @@ html_code = """
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
     const dir = vector.sub(camera.position).normalize();
-    const distanceToZ0 = -camera.position.z / dir.z;
-    return camera.position.clone().add(dir.multiplyScalar(distanceToZ0));
+    
+    // Project ray onto world plane Z = 0
+    const distance = -camera.position.z / dir.z;
+    return camera.position.clone().add(dir.multiplyScalar(distance));
   }
 
   function update3DPreview(start, end) {
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
-    const width = Math.max(dx, 40);
-    const height = Math.max(dy, 40);
+    
+    // Set minimal scale threshold to ensure visibility when pinch starts
+    const width = Math.max(dx, 60);
+    const height = Math.max(dy, 60);
     const depth = Math.max(width, height);
 
     if (!previewMesh3D) {
@@ -376,7 +381,7 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // INVERT X COORDINATE: aligns dots directly with mirrored video frame
+      // Standard coordinate mapping synced with mirrored frame
       const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
