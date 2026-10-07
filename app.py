@@ -46,7 +46,6 @@ html_code = """
       width: 1100px;
       height: 650px;
     }
-    /* Mirror 2D canvas overlay for video feed and tracking cues */
     #2d-canvas {
       position: absolute;
       top: 0;
@@ -54,7 +53,6 @@ html_code = """
       transform: scaleX(-1);
       z-index: 1;
     }
-    /* WebGL Three.js Overlay mirrored to stay synchronous with video */
     #3d-canvas {
       position: absolute;
       top: 0;
@@ -64,7 +62,6 @@ html_code = """
       pointer-events: none;
     }
 
-    /* Tinkercad-Style Toolbar UI */
     #ui-panel {
       position: absolute;
       top: 15px;
@@ -126,7 +123,6 @@ html_code = """
       color: #000 !important;
     }
 
-    /* Status Bar */
     #status-bar {
       position: absolute;
       bottom: 15px;
@@ -150,7 +146,6 @@ html_code = """
     <canvas id="3d-canvas" width="1100" height="650"></canvas>
   </div>
 
-  <!-- Tinkercad-inspired Controls -->
   <div id="ui-panel">
     <div class="ui-group">
       <span class="ui-label">Dimension Mode</span>
@@ -190,14 +185,12 @@ html_code = """
 </div>
 
 <script>
-  // DOM Elements
   const videoElement = document.getElementById('webcam');
   const canvas2D = document.getElementById('2d-canvas');
   const ctx2D = canvas2D.getContext('2d');
   const canvas3D = document.getElementById('3d-canvas');
   const statusBar = document.getElementById('status-bar');
 
-  // Application State
   let dimensionMode = '2D';
   let currentTool = 'free';
   let isPinching = false;
@@ -205,23 +198,21 @@ html_code = """
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
-  // Three.js 3D Setup
+  // Three.js Setup
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 0.1, 1000);
-  camera.position.set(0, 0, 500);
+  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
+  camera.position.set(0, 0, 800);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setSize(1100, 650);
 
-  // Add Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
   const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(200, 300, 400);
+  directionalLight.position.set(200, 300, 500);
   scene.add(directionalLight);
 
-  // Grid Helper (Tinkercad Workplane)
-  const gridHelper = new THREE.GridHelper(600, 20, 0x00b4d8, 0x444444);
+  const gridHelper = new THREE.GridHelper(800, 20, 0x00b4d8, 0x444444);
   gridHelper.rotation.x = Math.PI / 2;
   scene.add(gridHelper);
 
@@ -233,7 +224,6 @@ html_code = """
   }
   animate3D();
 
-  // Mode & Tool Switching Logic
   function setDimensionMode(mode) {
     dimensionMode = mode;
     document.getElementById('btn-2d').classList.toggle('active', mode === '2D');
@@ -265,21 +255,32 @@ html_code = """
     objects3D.length = 0;
   }
 
-  // Hand Tracking Logic (MediaPipe)
   function getDistance(p1, p2) {
     return Math.hypot((p1.x - p2.x) * 1100, (p1.y - p2.y) * 650);
   }
 
-  function canvasTo3D(canvasX, canvasY, zDepth = 0) {
-    // Aligns 3D projections directly with mirrored canvas pixels
-    const x = canvasX - 550;
-    const y = -(canvasY - 325);
-    return new THREE.Vector3(x, y, zDepth);
+  // Precise 2D Pixel to 3D World Coordinate Mapping via Raycasting / Perspective Calculation
+  function screenTo3D(pixelX, pixelY, distance = 800) {
+    const ndcX = (pixelX / 1100) * 2 - 1;
+    const ndcY = -(pixelY / 650) * 2 + 1;
+    
+    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+    vector.unproject(camera);
+    
+    const dir = vector.sub(camera.position).normalize();
+    const targetZ = 0;
+    const distanceToZ0 = (targetZ - camera.position.z) / dir.z;
+    
+    return camera.position.clone().add(dir.multiplyScalar(distanceToZ0));
   }
 
   function create3DSolid(tool, start, end) {
-    const width = Math.abs(end.x - start.x) || 40;
-    const height = Math.abs(end.y - start.y) || 40;
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    
+    // Default size if placed with a simple tap/pinch
+    const width = dx > 10 ? dx : 80;
+    const height = dy > 10 ? dy : 80;
     const depth = Math.max(width, height);
 
     let geometry;
@@ -299,39 +300,20 @@ html_code = """
 
     if (geometry) {
       const mesh = new THREE.Mesh(geometry, material);
-      const pos = canvasTo3D((start.x + end.x) / 2, (start.y + end.y) / 2, 0);
-      mesh.position.copy(pos);
+      const centerPixelX = (start.x + end.x) / 2;
+      const centerPixelY = (start.y + end.y) / 2;
+      
+      const pos3D = screenTo3D(centerPixelX, centerPixelY);
+      mesh.position.copy(pos3D);
       scene.add(mesh);
       objects3D.push(mesh);
     }
-  }
-
-  function extrudeLastShape(depth) {
-    if (activeDrawnPath.length < 3) return;
-
-    const shape = new THREE.Shape();
-    const firstPos = canvasTo3D(activeDrawnPath[0].x, activeDrawnPath[0].y);
-    shape.moveTo(firstPos.x, firstPos.y);
-
-    for (let i = 1; i < activeDrawnPath.length; i++) {
-      const pos = canvasTo3D(activeDrawnPath[i].x, activeDrawnPath[i].y);
-      shape.lineTo(pos.x, pos.y);
-    }
-
-    const extrudeSettings = { depth: Math.abs(depth) * 2, bevelEnabled: true, bevelThickness: 2, bevelSize: 2 };
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00b4d8, roughness: 0.2 });
-    const mesh = new THREE.Mesh(geometry, material);
-    
-    scene.add(mesh);
-    objects3D.push(mesh);
   }
 
   function onResults(results) {
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Draw Video Feed onto mirrored 2D canvas
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -341,73 +323,64 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Direct canvas coordinates synchronized with mirrored elements
       const canvasCursorX = indexTip.x * 1100;
       const canvasCursorY = indexTip.y * 650;
 
       const canvasPalmX = palmCenter.x * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Red Palm Anchor Marker
+      // Draw Palm Anchor Marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Measure Pinch (Index + Thumb)
+      // Check Pinch
       const pinchDist = getDistance(indexTip, thumbTip);
       const currentlyPinching = pinchDist < 55;
 
-      // Draw Index Fingertip Cursor (Green when pinching, Blue when open)
+      // Draw Fingertip Tracking Dot
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Gesture State Transitions
       if (currentlyPinching) {
         if (!isPinching) {
-          // Pinch Started
           isPinching = true;
           startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
+          currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
-          statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
+          statusBar.innerText = `Gesture Status: Pinching / Dragging (${currentTool.toUpperCase()})`;
         } else {
-          // Continuous Pinch Drag
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath.push(currentPinchPoint);
 
-          // Real-time 2D Preview Drawing
-          if (dimensionMode === '2D' || currentTool === 'free') {
-            ctx2D.strokeStyle = '#00ff88';
-            ctx2D.lineWidth = 4;
-            ctx2D.beginPath();
-            ctx2D.moveTo(startPinchPoint.x, startPinchPoint.y);
+          // Draw real-time gesture preview box/line
+          ctx2D.strokeStyle = '#00ff88';
+          ctx2D.lineWidth = 3;
+          ctx2D.beginPath();
 
-            if (currentTool === 'free') {
-              activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
-            } else if (currentTool === 'rectangle') {
-              ctx2D.strokeRect(startPinchPoint.x, startPinchPoint.y, currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
-            } else if (currentTool === 'circle') {
-              const radius = Math.hypot(currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
-              ctx2D.arc(startPinchPoint.x, startPinchPoint.y, radius, 0, 2 * Math.PI);
-            }
-            ctx2D.stroke();
+          if (currentTool === 'free') {
+            ctx2D.moveTo(startPinchPoint.x, startPinchPoint.y);
+            activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
+          } else {
+            ctx2D.rect(
+              startPinchPoint.x, 
+              startPinchPoint.y, 
+              currentPinchPoint.x - startPinchPoint.x, 
+              currentPinchPoint.y - startPinchPoint.y
+            );
           }
+          ctx2D.stroke();
         }
       } else {
         if (isPinching) {
-          // Pinch Released: Finalize Shape Creation
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Pinch Released (Shape Created)";
+          statusBar.innerText = "Gesture Status: Created Shape at Release Point";
 
           if (dimensionMode === '3D') {
-            if (['cube', 'sphere', 'cone'].includes(currentTool)) {
-              create3DSolid(currentTool, startPinchPoint, currentPinchPoint || startPinchPoint);
-            } else if (currentTool === 'extrude') {
-              const depth = Math.hypot(currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
-              extrudeLastShape(depth);
-            }
+            create3DSolid(currentTool, startPinchPoint, currentPinchPoint || startPinchPoint);
           }
         }
       }
@@ -418,7 +391,6 @@ html_code = """
     ctx2D.restore();
   }
 
-  // Camera & MediaPipe Initialization
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
