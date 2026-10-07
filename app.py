@@ -46,7 +46,6 @@ html_code = """
       width: 1100px;
       height: 650px;
     }
-    /* Removed CSS scaleX(-1) to eliminate double-mirroring */
     #2d-canvas {
       position: absolute;
       top: 0;
@@ -361,13 +360,13 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Mirror ONLY the video stream horizontally onto the canvas
+    // Draw mirrored video feed onto canvas
     ctx2D.translate(canvas2D.width, 0);
     ctx2D.scale(-1, 1);
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
-    // Re-render saved 2D shapes in native canvas coordinates
+    // Re-render saved 2D shapes
     shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -377,14 +376,14 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Standard coordinate mapping (matches mirrored video feed natively)
-      const canvasCursorX = indexTip.x * 1100;
+      // INVERT X COORDINATE: aligns dots directly with mirrored video frame
+      const canvasCursorX = (1 - indexTip.x) * 1100;
       const canvasCursorY = indexTip.y * 650;
 
-      const canvasThumbX = thumbTip.x * 1100;
+      const canvasThumbX = (1 - thumbTip.x) * 1100;
       const canvasThumbY = thumbTip.y * 650;
 
-      const canvasPalmX = palmCenter.x * 1100;
+      const canvasPalmX = (1 - palmCenter.x) * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
       // Draw Palm marker
