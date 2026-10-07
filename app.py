@@ -197,8 +197,8 @@ html_code = """
   const statusBar = document.getElementById('status-bar');
 
   // Application State
-  let dimensionMode = '2D'; // '2D' or '3D'
-  let currentTool = 'free'; // 'free', 'rectangle', 'circle', 'triangle', 'cube', 'sphere', 'cone', 'extrude'
+  let dimensionMode = '2D';
+  let currentTool = 'free';
   let isPinching = false;
   let startPinchPoint = null;
   let currentPinchPoint = null;
@@ -270,8 +270,8 @@ html_code = """
   }
 
   function screenTo3D(screenX, screenY, zDepth = 0) {
-    // Map screen pixel space into Three.js 3D world coordinates
-    const x = (screenX - 550);
+    // Correct horizontal alignment for Three.js coordinates
+    const x = screenX - 550;
     const y = -(screenY - 325);
     return new THREE.Vector3(x, y, zDepth);
   }
@@ -330,7 +330,7 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
-    // Draw Video Feed
+    // Draw Video Feed onto mirrored 2D canvas
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -340,17 +340,21 @@ html_code = """
       const indexTip = landmarks[8];
       const palmCenter = landmarks[9];
 
-      // Mirror coordinates to align with hand movement
-      const cursorX = (1 - indexTip.x) * 1100;
-      const cursorY = indexTip.y * 650;
+      // Native coordinates matching mirrored canvas
+      const canvasCursorX = indexTip.x * 1100;
+      const canvasCursorY = indexTip.y * 650;
 
-      const palmX = (1 - palmCenter.x) * 1100;
-      const palmY = palmCenter.y * 650;
+      const canvasPalmX = palmCenter.x * 1100;
+      const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm Anchor Marker (Red)
+      // Screen-mapped coordinates (Un-mirrored) for 3D calculations
+      const screenCursorX = (1 - indexTip.x) * 1100;
+      const screenCursorY = indexTip.y * 650;
+
+      // Draw Red Palm Anchor Marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
-      ctx2D.arc(palmX, palmY, 12, 0, 2 * Math.PI);
+      ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
       ctx2D.fill();
 
       // Measure Pinch (Index + Thumb)
@@ -360,20 +364,20 @@ html_code = """
       // Draw Index Fingertip Cursor (Green when pinching, Blue when open)
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
-      ctx2D.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
+      ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
       ctx2D.fill();
 
-      // Pinch Gesture State Transitions
+      // Gesture State Transitions
       if (currentlyPinching) {
         if (!isPinching) {
           // Pinch Started
           isPinching = true;
-          startPinchPoint = { x: cursorX, y: cursorY };
-          activeDrawnPath = [{ x: cursorX, y: cursorY }];
+          startPinchPoint = { x: screenCursorX, y: screenCursorY, canvasX: canvasCursorX, canvasY: canvasCursorY };
+          activeDrawnPath = [{ x: screenCursorX, y: screenCursorY }];
           statusBar.innerText = `Gesture Status: Drawing (${currentTool.toUpperCase()})`;
         } else {
-          // Pinch Continuous Drag
-          currentPinchPoint = { x: cursorX, y: cursorY };
+          // Continuous Pinch Drag
+          currentPinchPoint = { x: screenCursorX, y: screenCursorY, canvasX: canvasCursorX, canvasY: canvasCursorY };
           activeDrawnPath.push(currentPinchPoint);
 
           // Real-time 2D Preview Drawing
@@ -381,22 +385,22 @@ html_code = """
             ctx2D.strokeStyle = '#00ff88';
             ctx2D.lineWidth = 4;
             ctx2D.beginPath();
-            ctx2D.moveTo(startPinchPoint.x, startPinchPoint.y);
+            ctx2D.moveTo(startPinchPoint.canvasX, startPinchPoint.canvasY);
 
             if (currentTool === 'free') {
-              activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
+              activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.canvasX || pt.x, pt.canvasY || pt.y));
             } else if (currentTool === 'rectangle') {
-              ctx2D.strokeRect(startPinchPoint.x, startPinchPoint.y, currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
+              ctx2D.strokeRect(startPinchPoint.canvasX, startPinchPoint.canvasY, currentPinchPoint.canvasX - startPinchPoint.canvasX, currentPinchPoint.canvasY - startPinchPoint.canvasY);
             } else if (currentTool === 'circle') {
-              const radius = Math.hypot(currentPinchPoint.x - startPinchPoint.x, currentPinchPoint.y - startPinchPoint.y);
-              ctx2D.arc(startPinchPoint.x, startPinchPoint.y, radius, 0, 2 * Math.PI);
+              const radius = Math.hypot(currentPinchPoint.canvasX - startPinchPoint.canvasX, currentPinchPoint.canvasY - startPinchPoint.canvasY);
+              ctx2D.arc(startPinchPoint.canvasX, startPinchPoint.canvasY, radius, 0, 2 * Math.PI);
             }
             ctx2D.stroke();
           }
         }
       } else {
         if (isPinching) {
-          // Pinch Released: Finalize Drawing / 3D Creation
+          // Pinch Released: Finalize Shape Creation
           isPinching = false;
           statusBar.innerText = "Gesture Status: Pinch Released (Shape Created)";
 
