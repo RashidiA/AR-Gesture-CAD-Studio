@@ -14,7 +14,7 @@ html_code = """
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   
-  <!-- Three.js Engine for 3D & AR Rendering -->
+  <!-- Three.js Engine for 3D Rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
@@ -198,7 +198,10 @@ html_code = """
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
-  // Three.js Setup
+  // Persistent 2D Storage
+  const shapes2D = [];
+
+  // Three.js 3D Setup
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
   camera.position.set(0, 0, 800);
@@ -208,7 +211,7 @@ html_code = """
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
   directionalLight.position.set(200, 300, 500);
   scene.add(directionalLight);
 
@@ -217,9 +220,13 @@ html_code = """
   scene.add(gridHelper);
 
   const objects3D = [];
+  let previewMesh3D = null;
 
   function animate3D() {
     requestAnimationFrame(animate3D);
+    objects3D.forEach(obj => {
+      obj.rotation.y += 0.005;
+    });
     renderer.render(scene, camera);
   }
   animate3D();
@@ -251,62 +258,99 @@ html_code = """
 
   function clearCanvas() {
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
+    shapes2D.length = 0;
     objects3D.forEach(obj => scene.remove(obj));
     objects3D.length = 0;
+    if (previewMesh3D) {
+      scene.remove(previewMesh3D);
+      previewMesh3D = null;
+    }
   }
 
   function getDistance(p1, p2) {
     return Math.hypot((p1.x - p2.x) * 1100, (p1.y - p2.y) * 650);
   }
 
-  // Precise 2D Pixel to 3D World Coordinate Mapping via Raycasting / Perspective Calculation
-  function screenTo3D(pixelX, pixelY, distance = 800) {
+  // Draw any 2D shape object onto the 2D canvas context
+  function renderSingle2DShape(shape) {
+    ctx2D.strokeStyle = shape.color || '#00ff88';
+    ctx2D.lineWidth = 4;
+    ctx2D.beginPath();
+
+    if (shape.type === 'free') {
+      if (shape.path.length > 0) {
+        ctx2D.moveTo(shape.path[0].x, shape.path[0].y);
+        shape.path.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
+      }
+    } else if (shape.type === 'rectangle') {
+      ctx2D.rect(shape.start.x, shape.start.y, shape.end.x - shape.start.x, shape.end.y - shape.start.y);
+    } else if (shape.type === 'circle') {
+      const radius = Math.hypot(shape.end.x - shape.start.x, shape.end.y - shape.start.y);
+      ctx2D.arc(shape.start.x, shape.start.y, radius, 0, 2 * Math.PI);
+    } else if (shape.type === 'triangle') {
+      const topX = (shape.start.x + shape.end.x) / 2;
+      ctx2D.moveTo(topX, shape.start.y);
+      ctx2D.lineTo(shape.start.x, shape.end.y);
+      ctx2D.lineTo(shape.end.x, shape.end.y);
+      ctx2D.closePath();
+    }
+    ctx2D.stroke();
+  }
+
+  function screenTo3D(pixelX, pixelY) {
     const ndcX = (pixelX / 1100) * 2 - 1;
     const ndcY = -(pixelY / 650) * 2 + 1;
-    
+
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
-    
     const dir = vector.sub(camera.position).normalize();
-    const targetZ = 0;
-    const distanceToZ0 = (targetZ - camera.position.z) / dir.z;
-    
+    const distanceToZ0 = -camera.position.z / dir.z;
     return camera.position.clone().add(dir.multiplyScalar(distanceToZ0));
   }
 
-  function create3DSolid(tool, start, end) {
+  function update3DPreview(start, end) {
     const dx = Math.abs(end.x - start.x);
     const dy = Math.abs(end.y - start.y);
-    
-    // Default size if placed with a simple tap/pinch
-    const width = dx > 10 ? dx : 80;
-    const height = dy > 10 ? dy : 80;
+    const width = Math.max(dx, 20);
+    const height = Math.max(dy, 20);
     const depth = Math.max(width, height);
 
-    let geometry;
-    const material = new THREE.MeshStandardMaterial({ 
-      color: 0x00ff88, 
-      roughness: 0.3,
-      metalness: 0.2
-    });
+    if (!previewMesh3D) {
+      let geometry;
+      if (currentTool === 'cube' || currentTool === 'extrude') {
+        geometry = new THREE.BoxGeometry(1, 1, 1);
+      } else if (currentTool === 'sphere') {
+        geometry = new THREE.SphereGeometry(0.5, 32, 32);
+      } else if (currentTool === 'cone') {
+        geometry = new THREE.ConeGeometry(0.5, 1, 32);
+      }
 
-    if (tool === 'cube') {
-      geometry = new THREE.BoxGeometry(width, height, depth);
-    } else if (tool === 'sphere') {
-      geometry = new THREE.SphereGeometry(width / 2, 32, 32);
-    } else if (tool === 'cone') {
-      geometry = new THREE.ConeGeometry(width / 2, height, 32);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x00ff88,
+        wireframe: false,
+        roughness: 0.3,
+        metalness: 0.2,
+        transparent: true,
+        opacity: 0.85
+      });
+
+      previewMesh3D = new THREE.Mesh(geometry, material);
+      scene.add(previewMesh3D);
     }
 
-    if (geometry) {
-      const mesh = new THREE.Mesh(geometry, material);
-      const centerPixelX = (start.x + end.x) / 2;
-      const centerPixelY = (start.y + end.y) / 2;
-      
-      const pos3D = screenTo3D(centerPixelX, centerPixelY);
-      mesh.position.copy(pos3D);
-      scene.add(mesh);
-      objects3D.push(mesh);
+    previewMesh3D.scale.set(width, height, depth);
+    const centerX = (start.x + end.x) / 2;
+    const centerY = (start.y + end.y) / 2;
+    const pos3D = screenTo3D(centerX, centerY);
+    previewMesh3D.position.copy(pos3D);
+  }
+
+  function finalize3DSolid() {
+    if (previewMesh3D) {
+      previewMesh3D.material.opacity = 1.0;
+      previewMesh3D.material.color.setHex(0x00b4d8);
+      objects3D.push(previewMesh3D);
+      previewMesh3D = null;
     }
   }
 
@@ -314,7 +358,11 @@ html_code = """
     ctx2D.save();
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     
+    // Draw Video Feed
     ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
+
+    // Re-render ALL saved 2D drawings so they don't disappear
+    shapes2D.forEach(renderSingle2DShape);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
@@ -329,7 +377,7 @@ html_code = """
       const canvasPalmX = palmCenter.x * 1100;
       const canvasPalmY = palmCenter.y * 650;
 
-      // Draw Palm Anchor Marker
+      // Palm marker
       ctx2D.fillStyle = '#ff0055';
       ctx2D.beginPath();
       ctx2D.arc(canvasPalmX, canvasPalmY, 12, 0, 2 * Math.PI);
@@ -339,7 +387,7 @@ html_code = """
       const pinchDist = getDistance(indexTip, thumbTip);
       const currentlyPinching = pinchDist < 55;
 
-      // Draw Fingertip Tracking Dot
+      // Index cursor marker
       ctx2D.fillStyle = currentlyPinching ? '#00ff88' : '#00b4d8';
       ctx2D.beginPath();
       ctx2D.arc(canvasCursorX, canvasCursorY, 10, 0, 2 * Math.PI);
@@ -351,36 +399,40 @@ html_code = """
           startPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath = [{ x: canvasCursorX, y: canvasCursorY }];
-          statusBar.innerText = `Gesture Status: Pinching / Dragging (${currentTool.toUpperCase()})`;
+          statusBar.innerText = `Gesture Status: Drawing/Pinching (${currentTool.toUpperCase()})`;
         } else {
           currentPinchPoint = { x: canvasCursorX, y: canvasCursorY };
           activeDrawnPath.push(currentPinchPoint);
 
-          // Draw real-time gesture preview box/line
-          ctx2D.strokeStyle = '#00ff88';
-          ctx2D.lineWidth = 3;
-          ctx2D.beginPath();
-
-          if (currentTool === 'free') {
-            ctx2D.moveTo(startPinchPoint.x, startPinchPoint.y);
-            activeDrawnPath.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
+          if (dimensionMode === '3D') {
+            update3DPreview(startPinchPoint, currentPinchPoint);
           } else {
-            ctx2D.rect(
-              startPinchPoint.x, 
-              startPinchPoint.y, 
-              currentPinchPoint.x - startPinchPoint.x, 
-              currentPinchPoint.y - startPinchPoint.y
-            );
+            // Live 2D shape drawing preview
+            renderSingle2DShape({
+              type: currentTool,
+              start: startPinchPoint,
+              end: currentPinchPoint,
+              path: activeDrawnPath,
+              color: '#00ff88'
+            });
           }
-          ctx2D.stroke();
         }
       } else {
         if (isPinching) {
           isPinching = false;
-          statusBar.innerText = "Gesture Status: Created Shape at Release Point";
+          statusBar.innerText = "Gesture Status: Pinch Released (Shape Saved)";
 
           if (dimensionMode === '3D') {
-            create3DSolid(currentTool, startPinchPoint, currentPinchPoint || startPinchPoint);
+            finalize3DSolid();
+          } else {
+            // Save completed 2D shape into permanent array
+            shapes2D.push({
+              type: currentTool,
+              start: startPinchPoint,
+              end: currentPinchPoint || startPinchPoint,
+              path: [...activeDrawnPath],
+              color: '#00ff88'
+            });
           }
         }
       }
