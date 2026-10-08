@@ -39,8 +39,8 @@ html_code = r"""
     }
     #studio-container {
       position: relative;
-      width: 1100px;
-      height: 650px;
+      width: 1280px;
+      height: 720px;
       margin: 0 auto;
       border-radius: 16px;
       overflow: hidden;
@@ -55,17 +55,17 @@ html_code = r"""
       position: absolute;
       top: 0;
       left: 0;
-      width: 1100px;
-      height: 650px;
-      z-index: 1; /* Always visible to render webcam feed + 3D models */
+      width: 1280px;
+      height: 720px;
+      z-index: 1;
     }
     #sketch-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      width: 1100px;
-      height: 650px;
-      z-index: 2; /* Sits directly on top of webcam feed for 2D AR overlay */
+      width: 1280px;
+      height: 720px;
+      z-index: 2;
       pointer-events: none;
       display: none;
     }
@@ -197,8 +197,8 @@ html_code = r"""
 
 <div id="studio-container">
   <video id="webcam" playsinline autoplay muted></video>
-  <canvas id="webgl-canvas" width="1100" height="650"></canvas>
-  <canvas id="sketch-canvas" width="1100" height="650"></canvas>
+  <canvas id="webgl-canvas" width="1280" height="720"></canvas>
+  <canvas id="sketch-canvas" width="1280" height="720"></canvas>
 
   <div id="ui-panel">
     <div class="ui-group">
@@ -263,29 +263,29 @@ html_code = r"""
   let permanentDrawings = [];
   let currentPreviewShape = null;
 
-  // Smoother cursor tracking values
-  let smoothedCursor = { x: 550, y: 325 };
+  // Cursor position smooth damping
+  let smoothedCursor = { x: 640, y: 360 };
   const alpha = 0.25;
 
-  // --- Three.js Single Scene & Renderer Setup ---
+  // --- Three.js Scene Setup ---
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
+  const camera = new THREE.PerspectiveCamera(45, 1280 / 720, 1, 2000);
   camera.position.set(0, 0, 600);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvasWebGL, antialias: true, alpha: false });
-  renderer.setSize(1100, 650);
+  renderer.setSize(1280, 720);
   renderer.setPixelRatio(window.devicePixelRatio);
 
-  // --- Background Video Stream Mesh ---
+  // --- Background Video Stream Plane (Expanded to cover full 1280x720 canvas) ---
   const videoTexture = new THREE.VideoTexture(videoElement);
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
   videoTexture.format = THREE.RGBAFormat;
 
-  const bgGeo = new THREE.PlaneGeometry(1000, 590);
+  const bgGeo = new THREE.PlaneGeometry(1280, 720);
   const bgMat = new THREE.MeshBasicMaterial({ map: videoTexture, depthTest: false, depthWrite: false });
   const bgMesh = new THREE.Mesh(bgGeo, bgMat);
-  bgMesh.scale.x = -1; // Horizontal mirror flip
+  bgMesh.scale.x = -1; // Mirror flip horizontally
   bgMesh.position.set(0, 0, -500);
   scene.add(bgMesh);
 
@@ -301,8 +301,8 @@ html_code = r"""
   dirLight2.position.set(-300, -400, 300);
   scene.add(dirLight2);
 
-  // --- 3D Hand Cursor Marker (Small compact size) ---
-  const cursorGeo = new THREE.SphereGeometry(4, 16, 16);
+  // --- 3D Hand Cursor Dot ---
+  const cursorGeo = new THREE.SphereGeometry(3, 16, 16);
   const cursorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
   const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
   scene.add(cursorMesh);
@@ -317,7 +317,6 @@ html_code = r"""
       videoTexture.needsUpdate = true;
     }
 
-    // Always toggle 3D models visibility based on current mode
     objects3D.forEach(obj => {
       obj.visible = (activeMode === '3D');
       if (activeMode === '3D') {
@@ -335,21 +334,17 @@ html_code = r"""
 
     cursorMesh.visible = (activeMode === '3D');
 
-    // Always render WebGL background (Camera video texture is visible in BOTH 2D and 3D)
     renderer.render(scene, camera);
 
     if (activeMode === '2D') {
       sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
       
-      // Render permanent 2D shapes
       permanentDrawings.forEach(shape => draw2DShape(sketchCtx, shape));
       
-      // Render active live-preview shape during pinch drag
       if (isPinching && currentPreviewShape) {
         draw2DShape(sketchCtx, currentPreviewShape);
       }
 
-      // Render 2D Cursor Dot over video background
       sketchCtx.beginPath();
       sketchCtx.arc(smoothedCursor.x, smoothedCursor.y, 4, 0, Math.PI * 2);
       sketchCtx.fillStyle = isPinching ? '#10b981' : '#38bdf8';
@@ -415,8 +410,8 @@ html_code = r"""
   }
 
   function mapScreenTo3D(screenX, screenY) {
-    const x = (screenX - 550) * 0.75;
-    const y = -(screenY - 325) * 0.75;
+    const x = (screenX - 640) * 0.55;
+    const y = -(screenY - 360) * 0.55;
     return new THREE.Vector3(x, y, 0);
   }
 
@@ -469,10 +464,10 @@ html_code = r"""
     }
   }
 
-  // --- 3D Shape Creation Utilities ---
+  // --- 3D Shape Creation (Reduced size by 50%) ---
   function create3DShape(type, size, pos) {
     let geometry;
-    const s = Math.max(size, 50);
+    const s = Math.max(size * 0.5, 25); // 50% scale reduction
 
     if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
@@ -498,7 +493,7 @@ html_code = r"""
 
   function updatePreview(start, end) {
     if (activeMode === '3D') {
-      const size = Math.max(getDistance(start, end), 50);
+      const size = Math.max(getDistance(start, end), 25);
       const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
       if (previewMesh3D) {
@@ -538,10 +533,10 @@ html_code = r"""
       const thumbTip = landmarks[4];
       const indexTip = landmarks[8];
 
-      const rawCursorX = (1 - indexTip.x) * 1100;
-      const rawCursorY = indexTip.y * 650;
-      const rawThumbX = (1 - thumbTip.x) * 1100;
-      const rawThumbY = thumbTip.y * 650;
+      const rawCursorX = (1 - indexTip.x) * 1280;
+      const rawCursorY = indexTip.y * 720;
+      const rawThumbX = (1 - thumbTip.x) * 1280;
+      const rawThumbY = thumbTip.y * 720;
 
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
@@ -617,8 +612,8 @@ html_code = r"""
     onFrame: async () => {
       await hands.send({ image: videoElement });
     },
-    width: 1100,
-    height: 650
+    width: 1280,
+    height: 720
   });
 
   cameraMedia.start().then(() => {
@@ -633,4 +628,4 @@ html_code = r"""
 </html>
 """
 
-components.html(html_code, height=670, width=1120)
+components.html(html_code, height=740, width=1300)
