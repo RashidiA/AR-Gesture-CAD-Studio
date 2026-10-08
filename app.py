@@ -10,7 +10,7 @@ st.set_page_config(
 st.title("🎨 AR Gesture CAD Studio (2D & 3D)")
 st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D Parametric CAD Engine (Three.js)")
 
-html_code = """
+html_code = r"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -21,7 +21,7 @@ html_code = """
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   
-  <!-- Three.js Engine & OrbitControls -->
+  <!-- Three.js Engine for 3D Rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
@@ -359,7 +359,6 @@ html_code = """
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
   }
 
-  // Maps 2D mirrored screen pixels (1100x650) to 3D world space coordinates
   function mapScreenTo3DWorld(pixelX, pixelY) {
     const normX = (pixelX / 1100) * 2 - 1;
     const normY = -(pixelY / 650) * 2 + 1;
@@ -482,4 +481,107 @@ html_code = """
 
       const rawCursorX = (1 - indexTip.x) * 1100;
       const rawCursorY = indexTip.y * 650;
-      const raw
+      const rawThumbX = (1 - thumbTip.x) * 1100;
+      const rawThumbY = thumbTip.y * 650;
+
+      smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
+      smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
+
+      const pinchDist = getDistance(
+        { x: rawCursorX, y: rawCursorY },
+        { x: rawThumbX, y: rawThumbY }
+      );
+
+      pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
+      const currentlyPinching = pinchDist < 45;
+
+      ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
+      ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
+      ctx2D.shadowBlur = 10;
+      ctx2D.beginPath();
+      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 8, 0, 2 * Math.PI);
+      ctx2D.fill();
+      ctx2D.shadowBlur = 0;
+
+      if (currentlyPinching) {
+        if (!isPinching) {
+          isPinching = true;
+          startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          activeDrawnPath = [{ x: smoothedCursor.x, y: smoothedCursor.y }];
+          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
+        } else {
+          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          activeDrawnPath.push(currentPinchPoint);
+
+          if (activeMode === '3D') {
+            update3DPreview(startPinchPoint, currentPinchPoint);
+          } else {
+            renderSingle2DShape({
+              type: currentTool,
+              start: startPinchPoint,
+              end: currentPinchPoint,
+              path: activeDrawnPath,
+              color: '#10b981'
+            });
+          }
+        }
+      } else {
+        if (isPinching) {
+          isPinching = false;
+          statusBarText.innerText = `Tracking Active (${activeMode})`;
+
+          if (activeMode === '3D') {
+            finalize3DSolid();
+          } else {
+            shapes2D.push({
+              type: currentTool,
+              start: { ...startPinchPoint },
+              end: { ...currentPinchPoint },
+              path: [...activeDrawnPath],
+              color: '#38bdf8'
+            });
+          }
+        }
+      }
+    } else {
+      statusDot.classList.remove('active');
+      statusBarText.innerText = "Searching for hand...";
+      pinchIndicator.innerText = "Pinch Distance: --";
+    }
+  }
+
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.65
+  });
+
+  hands.onResults(onResults);
+
+  const cameraMedia = new Camera(videoElement, {
+    onFrame: async () => {
+      await hands.send({ image: videoElement });
+    },
+    width: 1100,
+    height: 650
+  });
+
+  cameraMedia.start().then(() => {
+    statusBarText.innerText = "Tracking Active (2D)";
+  }).catch((err) => {
+    statusBarText.innerText = "Camera Access Denied/Failed";
+    console.error(err);
+  });
+</script>
+
+</body>
+</html>
+"""
+
+components.html(html_code, height=670, width=1120)
