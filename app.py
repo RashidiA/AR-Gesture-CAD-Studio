@@ -21,7 +21,7 @@ html_code = """
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   
-  <!-- Three.js Engine for 3D Rendering -->
+  <!-- Three.js Engine & OrbitControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
@@ -269,23 +269,24 @@ html_code = """
 
   // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
-  camera.position.set(0, 0, 800);
+  const camera = new THREE.PerspectiveCamera(50, 1100 / 650, 1, 3000);
+  camera.position.set(0, 0, 700);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
+  renderer.setPixelRatio(window.devicePixelRatio);
 
-  // Scene Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  mainLight.position.set(200, 400, 500);
+  const mainLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+  mainLight.position.set(300, 500, 400);
   scene.add(mainLight);
 
-  const fillLight = new THREE.DirectionalLight(0x00ffff, 0.8);
-  fillLight.position.set(-200, -200, 300);
+  const fillLight = new THREE.DirectionalLight(0x10b981, 0.8);
+  fillLight.position.set(-300, -300, 200);
   scene.add(fillLight);
 
   const objects3D = [];
@@ -295,8 +296,8 @@ html_code = """
     requestAnimationFrame(animate3D);
 
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.01;
-      obj.rotation.x += 0.005;
+      obj.rotation.y += 0.008;
+      obj.rotation.x += 0.004;
     });
 
     if (previewMesh3D) {
@@ -339,11 +340,17 @@ html_code = """
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     shapes2D.length = 0;
 
-    objects3D.forEach(obj => scene.remove(obj));
+    objects3D.forEach(obj => {
+      scene.remove(obj);
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    });
     objects3D.length = 0;
 
     if (previewMesh3D) {
       scene.remove(previewMesh3D);
+      if (previewMesh3D.geometry) previewMesh3D.geometry.dispose();
+      if (previewMesh3D.material) previewMesh3D.material.dispose();
       previewMesh3D = null;
     }
   }
@@ -352,70 +359,68 @@ html_code = """
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
   }
 
+  // Maps 2D mirrored screen pixels (1100x650) to 3D world space coordinates
   function mapScreenTo3DWorld(pixelX, pixelY) {
-    const worldX = (pixelX - 550);
-    const worldY = -(pixelY - 325);
-    return new THREE.Vector3(worldX, worldY, 0);
+    const normX = (pixelX / 1100) * 2 - 1;
+    const normY = -(pixelY / 650) * 2 + 1;
+
+    const vector = new THREE.Vector3(normX, normY, 0.5);
+    vector.unproject(camera);
+
+    const dir = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z;
+    return camera.position.clone().add(dir.multiplyScalar(distance));
   }
 
-  function createMeshForTool(tool, pathData = null) {
-    let geometry;
-
-    if (tool === 'sphere') {
-      geometry = new THREE.SphereGeometry(1, 32, 32);
-    } else if (tool === 'cube') {
-      geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-    } else if (tool === 'cone') {
-      geometry = new THREE.ConeGeometry(1, 2, 32);
-    } else if (tool === 'extrude' && pathData && pathData.length > 2) {
-      const shape = new THREE.Shape();
-      const startPos = mapScreenTo3DWorld(pathData[0].x, pathData[0].y);
-      shape.moveTo(startPos.x / 10, startPos.y / 10);
-
-      for (let i = 1; i < pathData.length; i++) {
-        const pt = mapScreenTo3DWorld(pathData[i].x, pathData[i].y);
-        shape.lineTo(pt.x / 10, pt.y / 10);
-      }
-      shape.closePath();
-
-      const extrudeSettings = { steps: 1, depth: 5, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5 };
-      geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    } else {
-      geometry = new THREE.SphereGeometry(1, 32, 32);
-    }
-
-    const material = new THREE.MeshPhongMaterial({
-      color: 0x00ff88,
-      emissive: 0x003311,
-      specular: 0xffffff,
-      shininess: 100,
+  function create3DMaterial() {
+    return new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      roughness: 0.2,
+      metalness: 0.5,
+      emissive: 0x003344,
+      wireframe: false,
       side: THREE.DoubleSide
     });
-
-    return new THREE.Mesh(geometry, material);
   }
 
   function update3DPreview(start, end) {
-    const dragDistance = getDistance(start, end);
+    const dragDistance = Math.max(getDistance(start, end), 20);
+    const centerPt = mapScreenTo3DWorld((start.x + end.x) / 2, (start.y + end.y) / 2);
 
-    if (currentTool === 'extrude') {
-      if (activeDrawnPath.length > 3) {
-        if (previewMesh3D) scene.remove(previewMesh3D);
-        previewMesh3D = createMeshForTool('extrude', activeDrawnPath);
-        previewMesh3D.scale.set(10, 10, 10);
-        scene.add(previewMesh3D);
-      }
-    } else {
-      const size = Math.max(dragDistance * 1.2, 40);
-      if (!previewMesh3D) {
-        previewMesh3D = createMeshForTool(currentTool);
-        scene.add(previewMesh3D);
-      }
-      previewMesh3D.scale.set(size, size, size);
-      const centerX = (start.x + end.x) / 2;
-      const centerY = (start.y + end.y) / 2;
-      previewMesh3D.position.copy(mapScreenTo3DWorld(centerX, centerY));
+    if (previewMesh3D) {
+      scene.remove(previewMesh3D);
+      if (previewMesh3D.geometry) previewMesh3D.geometry.dispose();
+      previewMesh3D = null;
     }
+
+    let geometry;
+
+    if (currentTool === 'sphere') {
+      geometry = new THREE.SphereGeometry(dragDistance / 2, 32, 32);
+    } else if (currentTool === 'cube') {
+      geometry = new THREE.BoxGeometry(dragDistance, dragDistance, dragDistance);
+    } else if (currentTool === 'cone') {
+      geometry = new THREE.ConeGeometry(dragDistance / 2, dragDistance, 32);
+    } else if (currentTool === 'extrude' && activeDrawnPath.length > 3) {
+      const shape = new THREE.Shape();
+      const firstPt = mapScreenTo3DWorld(activeDrawnPath[0].x, activeDrawnPath[0].y);
+      shape.moveTo(firstPt.x - centerPt.x, firstPt.y - centerPt.y);
+
+      for (let i = 1; i < activeDrawnPath.length; i++) {
+        const pt = mapScreenTo3DWorld(activeDrawnPath[i].x, activeDrawnPath[i].y);
+        shape.lineTo(pt.x - centerPt.x, pt.y - centerPt.y);
+      }
+      shape.closePath();
+
+      const extrudeSettings = { steps: 1, depth: Math.max(dragDistance / 2, 15), bevelEnabled: true, bevelThickness: 2, bevelSize: 2 };
+      geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    } else {
+      geometry = new THREE.SphereGeometry(dragDistance / 2, 32, 32);
+    }
+
+    previewMesh3D = new THREE.Mesh(geometry, create3DMaterial());
+    previewMesh3D.position.copy(centerPt);
+    scene.add(previewMesh3D);
   }
 
   function finalize3DSolid() {
@@ -477,107 +482,4 @@ html_code = """
 
       const rawCursorX = (1 - indexTip.x) * 1100;
       const rawCursorY = indexTip.y * 650;
-      const rawThumbX = (1 - thumbTip.x) * 1100;
-      const rawThumbY = thumbTip.y * 650;
-
-      smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
-      smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
-
-      const pinchDist = getDistance(
-        { x: rawCursorX, y: rawCursorY },
-        { x: rawThumbX, y: rawThumbY }
-      );
-
-      pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
-      const currentlyPinching = pinchDist < 45;
-
-      ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
-      ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
-      ctx2D.shadowBlur = 10;
-      ctx2D.beginPath();
-      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 8, 0, 2 * Math.PI);
-      ctx2D.fill();
-      ctx2D.shadowBlur = 0;
-
-      if (currentlyPinching) {
-        if (!isPinching) {
-          isPinching = true;
-          startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          activeDrawnPath = [{ x: smoothedCursor.x, y: smoothedCursor.y }];
-          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
-        } else {
-          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          activeDrawnPath.push(currentPinchPoint);
-
-          if (activeMode === '3D') {
-            update3DPreview(startPinchPoint, currentPinchPoint);
-          } else {
-            renderSingle2DShape({
-              type: currentTool,
-              start: startPinchPoint,
-              end: currentPinchPoint,
-              path: activeDrawnPath,
-              color: '#10b981'
-            });
-          }
-        }
-      } else {
-        if (isPinching) {
-          isPinching = false;
-          statusBarText.innerText = `Tracking Active (${activeMode})`;
-
-          if (activeMode === '3D') {
-            finalize3DSolid();
-          } else {
-            shapes2D.push({
-              type: currentTool,
-              start: { ...startPinchPoint },
-              end: { ...currentPinchPoint },
-              path: [...activeDrawnPath],
-              color: '#38bdf8'
-            });
-          }
-        }
-      }
-    } else {
-      statusDot.classList.remove('active');
-      statusBarText.innerText = "Searching for hand...";
-      pinchIndicator.innerText = "Pinch Distance: --";
-    }
-  }
-
-  const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.65,
-    minTrackingConfidence: 0.65
-  });
-
-  hands.onResults(onResults);
-
-  const cameraMedia = new Camera(videoElement, {
-    onFrame: async () => {
-      await hands.send({ image: videoElement });
-    },
-    width: 1100,
-    height: 650
-  });
-
-  cameraMedia.start().then(() => {
-    statusBarText.innerText = "Tracking Active (2D)";
-  }).catch((err) => {
-    statusBarText.innerText = "Camera Access Denied/Failed";
-    console.error(err);
-  });
-</script>
-
-</body>
-</html>
-"""
-
-components.html(html_code, height=670, width=1120)
+      const raw
