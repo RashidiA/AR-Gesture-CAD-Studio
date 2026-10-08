@@ -7,8 +7,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.title("🎨 AR Gesture CAD Studio (2D & 3D)")
-st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D Parametric CAD Engine & 2D Sketcher")
+st.title("🎨 AR Gesture CAD Studio (2D & 3D AR)")
+st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D CAD Engine & 2D AR Sketcher")
 
 html_code = r"""
 <!DOCTYPE html>
@@ -57,7 +57,7 @@ html_code = r"""
       left: 0;
       width: 1100px;
       height: 650px;
-      z-index: 1;
+      z-index: 1; /* Always visible to render webcam feed + 3D models */
     }
     #sketch-canvas {
       position: absolute;
@@ -65,9 +65,9 @@ html_code = r"""
       left: 0;
       width: 1100px;
       height: 650px;
-      z-index: 2;
+      z-index: 2; /* Sits directly on top of webcam feed for 2D AR overlay */
       pointer-events: none;
-      display: none; /* Hidden by default when in 3D mode */
+      display: none;
     }
 
     #ui-panel {
@@ -260,12 +260,12 @@ html_code = r"""
   let currentPinchPoint = null;
 
   // 2D Drawing Data Storage
-  let permanentDrawings = []; // Completed 2D shapes/lines
-  let currentPreviewShape = null; // Shape currently being dragged
+  let permanentDrawings = [];
+  let currentPreviewShape = null;
 
-  // Smoother tracking values (higher alpha = more stable/less jitter)
+  // Smoother cursor tracking values
   let smoothedCursor = { x: 550, y: 325 };
-  const alpha = 0.2; // Increased smoothing for less sensitivity & jitter
+  const alpha = 0.25;
 
   // --- Three.js Single Scene & Renderer Setup ---
   const scene = new THREE.Scene();
@@ -301,7 +301,7 @@ html_code = r"""
   dirLight2.position.set(-300, -400, 300);
   scene.add(dirLight2);
 
-  // --- 3D Hand Cursor Marker (Smaller & cleaner size: radius 4) ---
+  // --- 3D Hand Cursor Marker (Small compact size) ---
   const cursorGeo = new THREE.SphereGeometry(4, 16, 16);
   const cursorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
   const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
@@ -317,22 +317,31 @@ html_code = r"""
       videoTexture.needsUpdate = true;
     }
 
-    if (activeMode === '3D') {
-      objects3D.forEach(obj => {
+    // Always toggle 3D models visibility based on current mode
+    objects3D.forEach(obj => {
+      obj.visible = (activeMode === '3D');
+      if (activeMode === '3D') {
         obj.rotation.y += 0.01;
         obj.rotation.x += 0.006;
-      });
+      }
+    });
 
-      if (previewMesh3D) {
+    if (previewMesh3D) {
+      previewMesh3D.visible = (activeMode === '3D');
+      if (activeMode === '3D') {
         previewMesh3D.rotation.y += 0.015;
       }
+    }
 
-      renderer.render(scene, camera);
-    } else {
-      // 2D Mode Rendering onto HTML5 2D Canvas Overlay
+    cursorMesh.visible = (activeMode === '3D');
+
+    // Always render WebGL background (Camera video texture is visible in BOTH 2D and 3D)
+    renderer.render(scene, camera);
+
+    if (activeMode === '2D') {
       sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
       
-      // Render permanent shapes
+      // Render permanent 2D shapes
       permanentDrawings.forEach(shape => draw2DShape(sketchCtx, shape));
       
       // Render active live-preview shape during pinch drag
@@ -340,7 +349,7 @@ html_code = r"""
         draw2DShape(sketchCtx, currentPreviewShape);
       }
 
-      // Render 2D Cursor Dot
+      // Render 2D Cursor Dot over video background
       sketchCtx.beginPath();
       sketchCtx.arc(smoothedCursor.x, smoothedCursor.y, 4, 0, Math.PI * 2);
       sketchCtx.fillStyle = isPinching ? '#10b981' : '#38bdf8';
@@ -361,11 +370,9 @@ html_code = r"""
     document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
 
     if (mode === '2D') {
-      canvasWebGL.style.display = 'none';
       sketchCanvas.style.display = 'block';
       setTool('free');
     } else {
-      canvasWebGL.style.display = 'block';
       sketchCanvas.style.display = 'none';
       setTool('cube');
     }
@@ -416,7 +423,7 @@ html_code = r"""
   // --- 2D Drawing Utilities ---
   function draw2DShape(ctx, shape) {
     ctx.strokeStyle = '#10b981';
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -536,7 +543,6 @@ html_code = r"""
       const rawThumbX = (1 - thumbTip.x) * 1100;
       const rawThumbY = thumbTip.y * 650;
 
-      // Apply smoother damping to remove hand jitter and reduce over-sensitivity
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
@@ -552,7 +558,6 @@ html_code = r"""
 
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
       
-      // Strict pinch threshold (< 45px) to prevent accidental triggers
       const currentlyPinching = pinchDist < 45;
 
       if (activeMode === '3D') {
@@ -590,7 +595,7 @@ html_code = r"""
       statusBarText.innerText = "Searching for hand...";
       pinchIndicator.innerText = "Pinch Distance: --";
       if (activeMode === '3D') {
-        cursorMesh.position.set(2000, 2000, 0); // Hide offscreen
+        cursorMesh.position.set(2000, 2000, 0);
       }
     }
   }
