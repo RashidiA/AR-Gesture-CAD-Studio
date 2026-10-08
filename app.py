@@ -8,7 +8,7 @@ st.set_page_config(
 )
 
 st.title("🎨 AR Gesture CAD Studio (2D & 3D)")
-st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D Parametric CAD Engine (Three.js)")
+st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D Parametric CAD Engine & 2D Sketcher")
 
 html_code = r"""
 <!DOCTYPE html>
@@ -49,7 +49,7 @@ html_code = r"""
       background: #0d0f12;
     }
     video {
-      display: none; /* Video runs hidden in background; Three.js renders it */
+      display: none;
     }
     #webgl-canvas {
       position: absolute;
@@ -58,6 +58,16 @@ html_code = r"""
       width: 1100px;
       height: 650px;
       z-index: 1;
+    }
+    #sketch-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1100px;
+      height: 650px;
+      z-index: 2;
+      pointer-events: none;
+      display: none; /* Hidden by default when in 3D mode */
     }
 
     #ui-panel {
@@ -188,6 +198,7 @@ html_code = r"""
 <div id="studio-container">
   <video id="webcam" playsinline autoplay muted></video>
   <canvas id="webgl-canvas" width="1100" height="650"></canvas>
+  <canvas id="sketch-canvas" width="1100" height="650"></canvas>
 
   <div id="ui-panel">
     <div class="ui-group">
@@ -235,6 +246,9 @@ html_code = r"""
 <script>
   const videoElement = document.getElementById('webcam');
   const canvasWebGL = document.getElementById('webgl-canvas');
+  const sketchCanvas = document.getElementById('sketch-canvas');
+  const sketchCtx = sketchCanvas.getContext('2d');
+  
   const statusBarText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
   const pinchIndicator = document.getElementById('pinch-indicator');
@@ -245,8 +259,13 @@ html_code = r"""
   let startPinchPoint = null;
   let currentPinchPoint = null;
 
-  let smoothedCursor = { x: 0, y: 0 };
-  const alpha = 0.35;
+  // 2D Drawing Data Storage
+  let permanentDrawings = []; // Completed 2D shapes/lines
+  let currentPreviewShape = null; // Shape currently being dragged
+
+  // Smoother tracking values (higher alpha = more stable/less jitter)
+  let smoothedCursor = { x: 550, y: 325 };
+  const alpha = 0.2; // Increased smoothing for less sensitivity & jitter
 
   // --- Three.js Single Scene & Renderer Setup ---
   const scene = new THREE.Scene();
@@ -264,10 +283,9 @@ html_code = r"""
   videoTexture.format = THREE.RGBAFormat;
 
   const bgGeo = new THREE.PlaneGeometry(1000, 590);
-  // Mirror video horizontally to match webcam feel
   const bgMat = new THREE.MeshBasicMaterial({ map: videoTexture, depthTest: false, depthWrite: false });
   const bgMesh = new THREE.Mesh(bgGeo, bgMat);
-  bgMesh.scale.x = -1; // Horizontal flip
+  bgMesh.scale.x = -1; // Horizontal mirror flip
   bgMesh.position.set(0, 0, -500);
   scene.add(bgMesh);
 
@@ -283,8 +301,8 @@ html_code = r"""
   dirLight2.position.set(-300, -400, 300);
   scene.add(dirLight2);
 
-  // --- 3D Hand Cursor Marker ---
-  const cursorGeo = new THREE.SphereGeometry(10, 16, 16);
+  // --- 3D Hand Cursor Marker (Smaller & cleaner size: radius 4) ---
+  const cursorGeo = new THREE.SphereGeometry(4, 16, 16);
   const cursorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
   const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
   scene.add(cursorMesh);
@@ -292,25 +310,47 @@ html_code = r"""
   const objects3D = [];
   let previewMesh3D = null;
 
-  function animate3D() {
-    requestAnimationFrame(animate3D);
+  function animateEngine() {
+    requestAnimationFrame(animateEngine);
 
     if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
       videoTexture.needsUpdate = true;
     }
 
-    objects3D.forEach(obj => {
-      obj.rotation.y += 0.012;
-      obj.rotation.x += 0.008;
-    });
+    if (activeMode === '3D') {
+      objects3D.forEach(obj => {
+        obj.rotation.y += 0.01;
+        obj.rotation.x += 0.006;
+      });
 
-    if (previewMesh3D) {
-      previewMesh3D.rotation.y += 0.02;
+      if (previewMesh3D) {
+        previewMesh3D.rotation.y += 0.015;
+      }
+
+      renderer.render(scene, camera);
+    } else {
+      // 2D Mode Rendering onto HTML5 2D Canvas Overlay
+      sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
+      
+      // Render permanent shapes
+      permanentDrawings.forEach(shape => draw2DShape(sketchCtx, shape));
+      
+      // Render active live-preview shape during pinch drag
+      if (isPinching && currentPreviewShape) {
+        draw2DShape(sketchCtx, currentPreviewShape);
+      }
+
+      // Render 2D Cursor Dot
+      sketchCtx.beginPath();
+      sketchCtx.arc(smoothedCursor.x, smoothedCursor.y, 4, 0, Math.PI * 2);
+      sketchCtx.fillStyle = isPinching ? '#10b981' : '#38bdf8';
+      sketchCtx.fill();
+      sketchCtx.lineWidth = 2;
+      sketchCtx.strokeStyle = '#ffffff';
+      sketchCtx.stroke();
     }
-
-    renderer.render(scene, camera);
   }
-  animate3D();
+  animateEngine();
 
   function switchMode(mode) {
     activeMode = mode;
@@ -320,7 +360,15 @@ html_code = r"""
     document.getElementById('group-2d-tools').style.display = mode === '2D' ? 'flex' : 'none';
     document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
 
-    setTool(mode === '2D' ? 'free' : 'cube');
+    if (mode === '2D') {
+      canvasWebGL.style.display = 'none';
+      sketchCanvas.style.display = 'block';
+      setTool('free');
+    } else {
+      canvasWebGL.style.display = 'block';
+      sketchCanvas.style.display = 'none';
+      setTool('cube');
+    }
   }
 
   function setTool(tool) {
@@ -336,16 +384,22 @@ html_code = r"""
   }
 
   function clearCanvas() {
-    objects3D.forEach(obj => {
-      scene.remove(obj);
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) obj.material.dispose();
-    });
-    objects3D.length = 0;
+    if (activeMode === '3D') {
+      objects3D.forEach(obj => {
+        scene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      });
+      objects3D.length = 0;
 
-    if (previewMesh3D) {
-      scene.remove(previewMesh3D);
-      previewMesh3D = null;
+      if (previewMesh3D) {
+        scene.remove(previewMesh3D);
+        previewMesh3D = null;
+      }
+    } else {
+      permanentDrawings = [];
+      currentPreviewShape = null;
+      sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
     }
   }
 
@@ -359,9 +413,59 @@ html_code = r"""
     return new THREE.Vector3(x, y, 0);
   }
 
+  // --- 2D Drawing Utilities ---
+  function draw2DShape(ctx, shape) {
+    ctx.strokeStyle = '#10b981';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (shape.tool === 'free' && shape.points) {
+      if (shape.points.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(shape.points[0].x, shape.points[0].y);
+      for (let i = 1; i < shape.points.length; i++) {
+        ctx.lineTo(shape.points[i].x, shape.points[i].y);
+      }
+      ctx.stroke();
+    } else if (shape.tool === 'rectangle') {
+      const w = shape.end.x - shape.start.x;
+      const h = shape.end.y - shape.start.y;
+      ctx.beginPath();
+      ctx.rect(shape.start.x, shape.start.y, w, h);
+      ctx.fill();
+      ctx.stroke();
+    } else if (shape.tool === 'circle') {
+      const radius = getDistance(shape.start, shape.end) / 2;
+      const cx = (shape.start.x + shape.end.x) / 2;
+      const cy = (shape.start.y + shape.end.y) / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(radius, 5), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (shape.tool === 'triangle') {
+      const x1 = (shape.start.x + shape.end.x) / 2;
+      const y1 = shape.start.y;
+      const x2 = shape.start.x;
+      const y2 = shape.end.y;
+      const x3 = shape.end.x;
+      const y3 = shape.end.y;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  // --- 3D Shape Creation Utilities ---
   function create3DShape(type, size, pos) {
     let geometry;
-    const s = Math.max(size, 60);
+    const s = Math.max(size, 50);
 
     if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
@@ -385,22 +489,37 @@ html_code = r"""
     return mesh;
   }
 
-  function update3DPreview(start, end) {
-    const size = Math.max(getDistance(start, end), 60);
-    const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
+  function updatePreview(start, end) {
+    if (activeMode === '3D') {
+      const size = Math.max(getDistance(start, end), 50);
+      const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
-    if (previewMesh3D) {
-      scene.remove(previewMesh3D);
+      if (previewMesh3D) {
+        scene.remove(previewMesh3D);
+      }
+      previewMesh3D = create3DShape(currentTool, size, pos);
+      scene.add(previewMesh3D);
+    } else {
+      if (currentTool === 'free') {
+        if (!currentPreviewShape.points) currentPreviewShape.points = [];
+        currentPreviewShape.points.push({ x: end.x, y: end.y });
+      } else {
+        currentPreviewShape.end = { x: end.x, y: end.y };
+      }
     }
-
-    previewMesh3D = create3DShape(currentTool, size, pos);
-    scene.add(previewMesh3D);
   }
 
-  function finalize3DSolid() {
-    if (previewMesh3D) {
-      objects3D.push(previewMesh3D);
-      previewMesh3D = null;
+  function finalizeShape() {
+    if (activeMode === '3D') {
+      if (previewMesh3D) {
+        objects3D.push(previewMesh3D);
+        previewMesh3D = null;
+      }
+    } else {
+      if (currentPreviewShape) {
+        permanentDrawings.push(currentPreviewShape);
+        currentPreviewShape = null;
+      }
     }
   }
 
@@ -417,11 +536,14 @@ html_code = r"""
       const rawThumbX = (1 - thumbTip.x) * 1100;
       const rawThumbY = thumbTip.y * 650;
 
+      // Apply smoother damping to remove hand jitter and reduce over-sensitivity
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
-      const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
-      cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+      if (activeMode === '3D') {
+        const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
+        cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+      }
 
       const pinchDist = getDistance(
         { x: rawCursorX, y: rawCursorY },
@@ -430,33 +552,46 @@ html_code = r"""
 
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
       
-      const currentlyPinching = pinchDist < 60; // Increased threshold for instant response
-      cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
+      // Strict pinch threshold (< 45px) to prevent accidental triggers
+      const currentlyPinching = pinchDist < 45;
+
+      if (activeMode === '3D') {
+        cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
+      }
 
       if (currentlyPinching) {
         if (!isPinching) {
           isPinching = true;
           startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
+          
+          if (activeMode === '2D') {
+            currentPreviewShape = {
+              tool: currentTool,
+              start: { x: smoothedCursor.x, y: smoothedCursor.y },
+              end: { x: smoothedCursor.x, y: smoothedCursor.y },
+              points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null
+            };
+          }
 
-          update3DPreview(startPinchPoint, currentPinchPoint);
+          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
+          updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
         } else {
-          currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          update3DPreview(startPinchPoint, currentPinchPoint);
+          updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
         }
       } else {
         if (isPinching) {
           isPinching = false;
           statusBarText.innerText = `Tracking Active (${activeMode})`;
-          finalize3DSolid();
+          finalizeShape();
         }
       }
     } else {
       statusDot.classList.remove('active');
       statusBarText.innerText = "Searching for hand...";
       pinchIndicator.innerText = "Pinch Distance: --";
-      cursorMesh.position.set(2000, 2000, 0); // Hide offscreen
+      if (activeMode === '3D') {
+        cursorMesh.position.set(2000, 2000, 0); // Hide offscreen
+      }
     }
   }
 
@@ -467,8 +602,8 @@ html_code = r"""
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
-    minDetectionConfidence: 0.60,
-    minTrackingConfidence: 0.60
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.65
   });
 
   hands.onResults(onResults);
