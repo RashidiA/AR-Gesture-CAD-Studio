@@ -83,8 +83,8 @@ html_code = r"""
       border-radius: 12px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      width: 240px;
+      gap: 12px;
+      width: 250px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
     }
@@ -109,11 +109,17 @@ html_code = r"""
       gap: 6px;
     }
 
+    .btn-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+
     button {
       background: #1f2937;
       color: #9ca3af;
       border: 1px solid #374151;
-      padding: 8px 10px;
+      padding: 7px 8px;
       border-radius: 8px;
       font-weight: 600;
       font-size: 11px;
@@ -136,6 +142,16 @@ html_code = r"""
       border-color: #38bdf8 !important;
       color: #ffffff !important;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    #btn-delete {
+      background: rgba(234, 88, 12, 0.2);
+      border: 1px solid rgba(234, 88, 12, 0.5);
+      color: #fdba74;
+    }
+    #btn-delete:hover {
+      background: #ea580c;
+      color: white;
     }
 
     #btn-clear {
@@ -220,13 +236,27 @@ html_code = r"""
     </div>
 
     <div class="ui-group" id="group-3d-tools">
-      <span class="ui-label">3D Primitives & CAD</span>
+      <span class="ui-label">3D Primitives & Create</span>
       <div class="btn-grid">
         <button id="btn-sphere" onclick="setTool('sphere')">Sphere</button>
         <button id="btn-cube" class="active" onclick="setTool('cube')">Cube</button>
         <button id="btn-cone" onclick="setTool('cone')">Cone</button>
         <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
       </div>
+    </div>
+
+    <div class="ui-group" id="group-3d-manipulation">
+      <span class="ui-label">Object Select & Transform</span>
+      <div class="btn-grid">
+        <button id="btn-select" onclick="setTool('select')">Select Object</button>
+        <button id="btn-move" onclick="setTool('move')">Move</button>
+      </div>
+      <div class="btn-grid-3">
+        <button id="btn-rotx" onclick="setTool('rotx')">Rot X</button>
+        <button id="btn-roty" onclick="setTool('roty')">Rot Y</button>
+        <button id="btn-rotz" onclick="setTool('rotz')">Rot Z</button>
+      </div>
+      <button id="btn-delete" onclick="deleteSelectedObject()">Delete Selected</button>
     </div>
 
     <div class="ui-group">
@@ -257,7 +287,12 @@ html_code = r"""
   let currentTool = 'cube';
   let isPinching = false;
   let startPinchPoint = null;
-  let currentPinchPoint = null;
+  let lastPinchPoint = null;
+
+  // Selection & Transform tracking
+  let selectedObject = null;
+  const raycaster = new THREE.Raycaster();
+  const mouse2D = new THREE.Vector2();
 
   // 2D Drawing Data Storage
   let permanentDrawings = [];
@@ -276,7 +311,7 @@ html_code = r"""
   renderer.setSize(1280, 720);
   renderer.setPixelRatio(window.devicePixelRatio);
 
-  // --- Background Video Stream Plane (Expanded to cover full 1280x720 canvas) ---
+  // --- Background Video Stream Plane ---
   const videoTexture = new THREE.VideoTexture(videoElement);
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
@@ -285,7 +320,7 @@ html_code = r"""
   const bgGeo = new THREE.PlaneGeometry(1280, 720);
   const bgMat = new THREE.MeshBasicMaterial({ map: videoTexture, depthTest: false, depthWrite: false });
   const bgMesh = new THREE.Mesh(bgGeo, bgMat);
-  bgMesh.scale.x = -1; // Mirror flip horizontally
+  bgMesh.scale.x = -1;
   bgMesh.position.set(0, 0, -500);
   scene.add(bgMesh);
 
@@ -310,6 +345,15 @@ html_code = r"""
   const objects3D = [];
   let previewMesh3D = null;
 
+  function setHighlight(mesh, isSelected) {
+    if (!mesh || !mesh.material) return;
+    if (isSelected) {
+      mesh.material.emissive.setHex(0xf59e0b); // Orange-Yellow selection glow
+    } else {
+      mesh.material.emissive.setHex(0x042f2e); // Normal emerald glow
+    }
+  }
+
   function animateEngine() {
     requestAnimationFrame(animateEngine);
 
@@ -319,9 +363,9 @@ html_code = r"""
 
     objects3D.forEach(obj => {
       obj.visible = (activeMode === '3D');
-      if (activeMode === '3D') {
-        obj.rotation.y += 0.01;
-        obj.rotation.x += 0.006;
+      // Gentle idle rotation only if not actively selected
+      if (activeMode === '3D' && obj !== selectedObject) {
+        obj.rotation.y += 0.005;
       }
     });
 
@@ -363,6 +407,12 @@ html_code = r"""
 
     document.getElementById('group-2d-tools').style.display = mode === '2D' ? 'flex' : 'none';
     document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
+    document.getElementById('group-3d-manipulation').style.display = mode === '3D' ? 'flex' : 'none';
+
+    if (selectedObject) {
+      setHighlight(selectedObject, false);
+      selectedObject = null;
+    }
 
     if (mode === '2D') {
       sketchCanvas.style.display = 'block';
@@ -375,13 +425,27 @@ html_code = r"""
 
   function setTool(tool) {
     currentTool = tool.toLowerCase();
-    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button').forEach(btn => {
-      btn.classList.remove('active');
+    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button').forEach(btn => {
+      if (btn.id !== 'btn-delete') btn.classList.remove('active');
     });
 
     const activeBtn = document.getElementById(`btn-${currentTool}`);
     if (activeBtn) {
       activeBtn.classList.add('active');
+    }
+  }
+
+  function deleteSelectedObject() {
+    if (selectedObject && activeMode === '3D') {
+      scene.remove(selectedObject);
+      const index = objects3D.indexOf(selectedObject);
+      if (index > -1) {
+        objects3D.splice(index, 1);
+      }
+      if (selectedObject.geometry) selectedObject.geometry.dispose();
+      if (selectedObject.material) selectedObject.material.dispose();
+      selectedObject = null;
+      statusBarText.innerText = "Selected Object Deleted";
     }
   }
 
@@ -393,6 +457,7 @@ html_code = r"""
         if (obj.material) obj.material.dispose();
       });
       objects3D.length = 0;
+      selectedObject = null;
 
       if (previewMesh3D) {
         scene.remove(previewMesh3D);
@@ -413,6 +478,22 @@ html_code = r"""
     const x = (screenX - 640) * 0.55;
     const y = -(screenY - 360) * 0.55;
     return new THREE.Vector3(x, y, 0);
+  }
+
+  // --- Raycast Ray Selector ---
+  function raycastSelectObject(screenX, screenY) {
+    mouse2D.x = (screenX / 1280) * 2 - 1;
+    mouse2D.y = -(screenY / 720) * 2 + 1;
+
+    raycaster.setFromCamera(mouse2D, camera);
+    const intersects = raycaster.intersectObjects(objects3D);
+
+    if (intersects.length > 0) {
+      if (selectedObject) setHighlight(selectedObject, false);
+      selectedObject = intersects[0].object;
+      setHighlight(selectedObject, true);
+      statusBarText.innerText = "Object Selected!";
+    }
   }
 
   // --- 2D Drawing Utilities ---
@@ -464,10 +545,10 @@ html_code = r"""
     }
   }
 
-  // --- 3D Shape Creation (Reduced size by 50%) ---
+  // --- 3D Shape Creation ---
   function create3DShape(type, size, pos) {
     let geometry;
-    const s = Math.max(size * 0.5, 25); // 50% scale reduction
+    const s = Math.max(size * 0.5, 25);
 
     if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
@@ -491,8 +572,30 @@ html_code = r"""
     return mesh;
   }
 
+  function handleTransform(currPos, prevPos) {
+    if (!selectedObject) return;
+
+    const dx = currPos.x - prevPos.x;
+    const dy = currPos.y - prevPos.y;
+
+    if (currentTool === 'move') {
+      const pos3D = mapScreenTo3D(currPos.x, currPos.y);
+      selectedObject.position.x = pos3D.x;
+      selectedObject.position.y = pos3D.y;
+    } else if (currentTool === 'rotx') {
+      selectedObject.rotation.x += dy * 0.02;
+    } else if (currentTool === 'roty') {
+      selectedObject.rotation.y += dx * 0.02;
+    } else if (currentTool === 'rotz') {
+      selectedObject.rotation.z += dx * 0.02;
+    }
+  }
+
   function updatePreview(start, end) {
     if (activeMode === '3D') {
+      if (['select', 'move', 'rotx', 'roty', 'rotz'].includes(currentTool)) {
+        return;
+      }
       const size = Math.max(getDistance(start, end), 25);
       const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
@@ -515,6 +618,9 @@ html_code = r"""
     if (activeMode === '3D') {
       if (previewMesh3D) {
         objects3D.push(previewMesh3D);
+        if (selectedObject) setHighlight(selectedObject, false);
+        selectedObject = previewMesh3D;
+        setHighlight(selectedObject, true);
         previewMesh3D = null;
       }
     } else {
@@ -563,8 +669,13 @@ html_code = r"""
         if (!isPinching) {
           isPinching = true;
           startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
           
-          if (activeMode === '2D') {
+          if (activeMode === '3D') {
+            if (currentTool === 'select') {
+              raycastSelectObject(smoothedCursor.x, smoothedCursor.y);
+            }
+          } else {
             currentPreviewShape = {
               tool: currentTool,
               start: { x: smoothedCursor.x, y: smoothedCursor.y },
@@ -573,10 +684,15 @@ html_code = r"""
             };
           }
 
-          statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
+          statusBarText.innerText = `Active [${activeMode} - ${currentTool.toUpperCase()}]`;
           updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
         } else {
-          updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
+          if (activeMode === '3D' && ['move', 'rotx', 'roty', 'rotz'].includes(currentTool)) {
+            handleTransform(smoothedCursor, lastPinchPoint);
+          } else {
+            updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
+          }
+          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
         }
       } else {
         if (isPinching) {
