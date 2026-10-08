@@ -49,7 +49,14 @@ html_code = r"""
       background: #111827;
     }
     video {
-      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1100px;
+      height: 650px;
+      object-fit: cover;
+      transform: scaleX(-1);
+      z-index: 1;
     }
     #canvas-container {
       position: absolute;
@@ -57,18 +64,20 @@ html_code = r"""
       left: 0;
       width: 1100px;
       height: 650px;
+      z-index: 2;
+      pointer-events: none;
     }
     #2d-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 1;
+      z-index: 2;
     }
     #3d-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 2;
+      z-index: 3;
     }
 
     #ui-panel {
@@ -87,6 +96,7 @@ html_code = r"""
       gap: 14px;
       width: 240px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
     }
 
     .ui-group {
@@ -196,7 +206,7 @@ html_code = r"""
 <body>
 
 <div id="studio-container">
-  <video id="webcam" playsinline></video>
+  <video id="webcam" playsinline autoplay muted></video>
   <div id="canvas-container">
     <canvas id="2d-canvas" width="1100" height="650"></canvas>
     <canvas id="3d-canvas" width="1100" height="650"></canvas>
@@ -268,25 +278,25 @@ html_code = r"""
 
   // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1100 / 650, 1, 3000);
-  camera.position.set(0, 0, 700);
+  const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
+  camera.position.set(0, 0, 500);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0);
+  renderer.setClearColor(0x000000, 0); // Transparent background
   renderer.setSize(1100, 650);
   renderer.setPixelRatio(window.devicePixelRatio);
 
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+  // Lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0x00f0ff, 2.0);
-  mainLight.position.set(300, 500, 400);
-  scene.add(mainLight);
+  const dirLight1 = new THREE.DirectionalLight(0x00ffff, 2.0);
+  dirLight1.position.set(200, 300, 400);
+  scene.add(dirLight1);
 
-  const fillLight = new THREE.DirectionalLight(0x10b981, 1.2);
-  fillLight.position.set(-300, -300, 200);
-  scene.add(fillLight);
+  const dirLight2 = new THREE.DirectionalLight(0xff00ff, 1.5);
+  dirLight2.position.set(-200, -300, 200);
+  scene.add(dirLight2);
 
   const objects3D = [];
   let previewMesh3D = null;
@@ -295,8 +305,8 @@ html_code = r"""
     requestAnimationFrame(animate3D);
 
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.01;
-      obj.rotation.x += 0.005;
+      obj.rotation.y += 0.015;
+      obj.rotation.x += 0.01;
     });
 
     if (previewMesh3D) {
@@ -363,52 +373,56 @@ html_code = r"""
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
   }
 
-  // Convert canvas pixel coordinates to 3D world space
-  function mapScreenTo3DWorld(pixelX, pixelY) {
-    const normX = (pixelX / 1100) * 2 - 1;
-    const normY = -(pixelY / 650) * 2 + 1;
-
-    return new THREE.Vector3(normX * 350, normY * 200, 0);
+  function mapScreenTo3D(screenX, screenY) {
+    // Map screen (0..1100, 0..650) to Three.js centered coordinates
+    const x = (screenX - 550) * 0.8;
+    const y = -(screenY - 325) * 0.8;
+    return new THREE.Vector3(x, y, 0);
   }
 
-  function create3DMaterial() {
-    return new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
-      roughness: 0.2,
-      metalness: 0.8,
-      emissive: 0x004466,
-      wireframe: false,
+  function create3DShape(type, size, pos) {
+    let geometry;
+    const s = Math.max(size, 40);
+
+    if (type === 'sphere') {
+      geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
+    } else if (type === 'cube') {
+      geometry = new THREE.BoxGeometry(s, s, s);
+    } else if (type === 'cone') {
+      geometry = new THREE.ConeGeometry(s / 1.5, s * 1.5, 32);
+    } else {
+      geometry = new THREE.CylinderGeometry(s / 1.5, s / 1.5, s, 32);
+    }
+
+    const material = new THREE.MeshPhongMaterial({
+      color: 0x00f0ff,
+      emissive: 0x003344,
+      specular: 0xffffff,
+      shininess: 100,
       side: THREE.DoubleSide
     });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(pos);
+
+    // Add bright wireframe overlay
+    const wireGeo = new THREE.WireframeGeometry(geometry);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+    mesh.add(wireframe);
+
+    return mesh;
   }
 
   function update3DPreview(start, end) {
-    // Default base radius set to 60px so objects are immediately visible upon pinch
-    const dragDistance = Math.max(getDistance(start, end), 60);
-    const centerPt = mapScreenTo3DWorld((start.x + end.x) / 2, (start.y + end.y) / 2);
+    const size = Math.max(getDistance(start, end), 50);
+    const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
     if (previewMesh3D) {
       scene.remove(previewMesh3D);
-      if (previewMesh3D.geometry) previewMesh3D.geometry.dispose();
-      previewMesh3D = null;
     }
 
-    let geometry;
-
-    if (currentTool === 'sphere') {
-      geometry = new THREE.SphereGeometry(dragDistance / 1.5, 32, 32);
-    } else if (currentTool === 'cube') {
-      geometry = new THREE.BoxGeometry(dragDistance, dragDistance, dragDistance);
-    } else if (currentTool === 'cone') {
-      geometry = new THREE.ConeGeometry(dragDistance / 1.5, dragDistance * 1.5, 32);
-    } else if (currentTool === 'extrude') {
-      geometry = new THREE.CylinderGeometry(dragDistance / 1.5, dragDistance / 1.5, dragDistance, 32);
-    } else {
-      geometry = new THREE.SphereGeometry(dragDistance / 1.5, 32, 32);
-    }
-
-    previewMesh3D = new THREE.Mesh(geometry, create3DMaterial());
-    previewMesh3D.position.copy(centerPt);
+    previewMesh3D = create3DShape(currentTool, size, pos);
     scene.add(previewMesh3D);
   }
 
@@ -452,11 +466,6 @@ html_code = r"""
 
   function onResults(results) {
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-    ctx2D.save();
-    ctx2D.translate(canvas2D.width, 0);
-    ctx2D.scale(-1, 1);
-    ctx2D.drawImage(results.image, 0, 0, canvas2D.width, canvas2D.height);
-    ctx2D.restore();
 
     if (activeMode === '2D') {
       shapes2D.forEach(renderSingle2DShape);
@@ -485,6 +494,7 @@ html_code = r"""
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
       const currentlyPinching = pinchDist < 45;
 
+      // Draw hand pointer on 2D canvas
       ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
       ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
       ctx2D.shadowBlur = 10;
