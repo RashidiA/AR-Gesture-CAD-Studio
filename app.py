@@ -260,7 +260,10 @@ html_code = f"""
 
     <div class="ui-group" id="group-3d-manipulation">
       <span class="ui-label">Object Transform</span>
-      <button id="btn-move" onclick="setTool('move')">Move</button>
+      <div class="btn-grid">
+        <button id="btn-move" onclick="setTool('move')">Move</button>
+        <button id="btn-resize" onclick="setTool('resize')">Resize</button>
+      </div>
       <div class="btn-grid-3">
         <button id="btn-rotx" onclick="setTool('rotx')">Rot X</button>
         <button id="btn-roty" onclick="setTool('roty')">Rot Y</button>
@@ -626,6 +629,12 @@ html_code = f"""
       const pos3D = mapScreenTo3D(currPos.x, currPos.y);
       selectedObject.position.x = pos3D.x;
       selectedObject.position.y = pos3D.y;
+    }} else if (currentTool === 'resize') {{
+      // Dragging right/up expands, left/down shrinks
+      const scaleDelta = (dx - dy) * 0.01;
+      const currentScale = selectedObject.scale.x;
+      const newScale = Math.max(0.1, currentScale + scaleDelta);
+      selectedObject.scale.set(newScale, newScale, newScale);
     }} else if (currentTool === 'rotx') {{
       selectedObject.rotation.x += dy * 0.02;
     }} else if (currentTool === 'roty') {{
@@ -637,7 +646,7 @@ html_code = f"""
 
   function updatePreview(start, end) {{
     if (activeMode === '3D') {{
-      if (['move', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
+      if (['move', 'resize', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
         return;
       }}
       const size = Math.max(getDistance(start, end), 25);
@@ -729,7 +738,7 @@ html_code = f"""
           statusBarText.innerText = `Active [${{activeMode}} - ${{currentTool.toUpperCase()}}]`;
           updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
         }} else {{
-          if (activeMode === '3D' && ['move', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
+          if (activeMode === '3D' && ['move', 'resize', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
             handleTransform(smoothedCursor, lastPinchPoint);
           }} else {{
             updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
