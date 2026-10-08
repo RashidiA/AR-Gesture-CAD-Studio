@@ -69,7 +69,6 @@ html_code = r"""
       top: 0;
       left: 0;
       z-index: 2;
-      pointer-events: auto;
     }
 
     #ui-panel {
@@ -269,8 +268,8 @@ html_code = r"""
 
   // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, 1100 / 650, 0.1, 5000);
-  camera.position.set(0, 0, 800);
+  const camera = new THREE.PerspectiveCamera(50, 1100 / 650, 1, 3000);
+  camera.position.set(0, 0, 700);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
@@ -278,15 +277,15 @@ html_code = r"""
   renderer.setPixelRatio(window.devicePixelRatio);
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-  mainLight.position.set(400, 600, 500);
+  const mainLight = new THREE.DirectionalLight(0x00f0ff, 2.0);
+  mainLight.position.set(300, 500, 400);
   scene.add(mainLight);
 
-  const fillLight = new THREE.DirectionalLight(0x10b981, 1.0);
-  fillLight.position.set(-400, -400, 300);
+  const fillLight = new THREE.DirectionalLight(0x10b981, 1.2);
+  fillLight.position.set(-300, -300, 200);
   scene.add(fillLight);
 
   const objects3D = [];
@@ -296,12 +295,12 @@ html_code = r"""
     requestAnimationFrame(animate3D);
 
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.008;
-      obj.rotation.x += 0.004;
+      obj.rotation.y += 0.01;
+      obj.rotation.x += 0.005;
     });
 
     if (previewMesh3D) {
-      previewMesh3D.rotation.y += 0.01;
+      previewMesh3D.rotation.y += 0.02;
     }
 
     renderer.render(scene, camera);
@@ -364,31 +363,28 @@ html_code = r"""
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
   }
 
+  // Convert canvas pixel coordinates to 3D world space
   function mapScreenTo3DWorld(pixelX, pixelY) {
     const normX = (pixelX / 1100) * 2 - 1;
     const normY = -(pixelY / 650) * 2 + 1;
 
-    const vector = new THREE.Vector3(normX, normY, 0.5);
-    vector.unproject(camera);
-
-    const dir = vector.sub(camera.position).normalize();
-    const distance = 800; // Fixed depth from camera plane for stable 3D placement
-    return camera.position.clone().add(dir.multiplyScalar(distance));
+    return new THREE.Vector3(normX * 350, normY * 200, 0);
   }
 
   function create3DMaterial() {
     return new THREE.MeshStandardMaterial({
-      color: 0x00f0ff,
+      color: 0x00e5ff,
       roughness: 0.2,
-      metalness: 0.6,
-      emissive: 0x003344,
+      metalness: 0.8,
+      emissive: 0x004466,
       wireframe: false,
       side: THREE.DoubleSide
     });
   }
 
   function update3DPreview(start, end) {
-    const dragDistance = Math.max(getDistance(start, end), 30);
+    // Default base radius set to 60px so objects are immediately visible upon pinch
+    const dragDistance = Math.max(getDistance(start, end), 60);
     const centerPt = mapScreenTo3DWorld((start.x + end.x) / 2, (start.y + end.y) / 2);
 
     if (previewMesh3D) {
@@ -400,26 +396,15 @@ html_code = r"""
     let geometry;
 
     if (currentTool === 'sphere') {
-      geometry = new THREE.SphereGeometry(dragDistance, 32, 32);
+      geometry = new THREE.SphereGeometry(dragDistance / 1.5, 32, 32);
     } else if (currentTool === 'cube') {
-      geometry = new THREE.BoxGeometry(dragDistance * 1.5, dragDistance * 1.5, dragDistance * 1.5);
+      geometry = new THREE.BoxGeometry(dragDistance, dragDistance, dragDistance);
     } else if (currentTool === 'cone') {
-      geometry = new THREE.ConeGeometry(dragDistance, dragDistance * 2, 32);
-    } else if (currentTool === 'extrude' && activeDrawnPath.length > 3) {
-      const shape = new THREE.Shape();
-      const firstPt = mapScreenTo3DWorld(activeDrawnPath[0].x, activeDrawnPath[0].y);
-      shape.moveTo(firstPt.x - centerPt.x, firstPt.y - centerPt.y);
-
-      for (let i = 1; i < activeDrawnPath.length; i++) {
-        const pt = mapScreenTo3DWorld(activeDrawnPath[i].x, activeDrawnPath[i].y);
-        shape.lineTo(pt.x - centerPt.x, pt.y - centerPt.y);
-      }
-      shape.closePath();
-
-      const extrudeSettings = { steps: 1, depth: Math.max(dragDistance, 30), bevelEnabled: true, bevelThickness: 4, bevelSize: 2 };
-      geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geometry = new THREE.ConeGeometry(dragDistance / 1.5, dragDistance * 1.5, 32);
+    } else if (currentTool === 'extrude') {
+      geometry = new THREE.CylinderGeometry(dragDistance / 1.5, dragDistance / 1.5, dragDistance, 32);
     } else {
-      geometry = new THREE.SphereGeometry(dragDistance, 32, 32);
+      geometry = new THREE.SphereGeometry(dragDistance / 1.5, 32, 32);
     }
 
     previewMesh3D = new THREE.Mesh(geometry, create3DMaterial());
@@ -515,6 +500,10 @@ html_code = r"""
           currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
           activeDrawnPath = [{ x: smoothedCursor.x, y: smoothedCursor.y }];
           statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
+
+          if (activeMode === '3D') {
+            update3DPreview(startPinchPoint, currentPinchPoint);
+          }
         } else {
           currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
           activeDrawnPath.push(currentPinchPoint);
