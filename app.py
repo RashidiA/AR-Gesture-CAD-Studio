@@ -235,7 +235,7 @@ html_code = r"""
       <span class="ui-label">3D Primitives & CAD</span>
       <div class="btn-grid">
         <button id="btn-sphere" onclick="setTool('sphere')">Sphere</button>
-        <button id="btn-cube" onclick="setTool('cube')">Cube</button>
+        <button id="btn-cube" class="active" onclick="setTool('cube')">Cube</button>
         <button id="btn-cone" onclick="setTool('cone')">Cone</button>
         <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
       </div>
@@ -264,14 +264,14 @@ html_code = r"""
   const statusDot = document.getElementById('status-dot');
   const pinchIndicator = document.getElementById('pinch-indicator');
 
-  let activeMode = '2D';
-  let currentTool = 'free';
+  let activeMode = '3D'; // Default to 3D so you can test right away
+  let currentTool = 'cube';
   let isPinching = false;
   let startPinchPoint = null;
   let currentPinchPoint = null;
   let activeDrawnPath = [];
 
-  let smoothedCursor = { x: 0, y: 0 };
+  let smoothedCursor = { x: 550, y: 325 };
   const alpha = 0.35;
 
   const shapes2D = [];
@@ -279,34 +279,42 @@ html_code = r"""
   // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
-  camera.position.set(0, 0, 500);
+  camera.position.set(0, 0, 600);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0); // Transparent background
+  renderer.setClearColor(0x000000, 0);
   renderer.setSize(1100, 650);
   renderer.setPixelRatio(window.devicePixelRatio);
 
   // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
   scene.add(ambientLight);
 
-  const dirLight1 = new THREE.DirectionalLight(0x00ffff, 2.0);
-  dirLight1.position.set(200, 300, 400);
+  const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 2.5);
+  dirLight1.position.set(300, 400, 500);
   scene.add(dirLight1);
 
-  const dirLight2 = new THREE.DirectionalLight(0xff00ff, 1.5);
-  dirLight2.position.set(-200, -300, 200);
+  const dirLight2 = new THREE.DirectionalLight(0xff00ff, 1.8);
+  dirLight2.position.set(-300, -400, 300);
   scene.add(dirLight2);
 
   const objects3D = [];
   let previewMesh3D = null;
 
+  // Add a test cube immediately in the center so Three.js rendering is confirmed working
+  const testGeo = new THREE.BoxGeometry(90, 90, 90);
+  const testMat = new THREE.MeshPhongMaterial({ color: 0x00f0ff, shininess: 100 });
+  const testMesh = new THREE.Mesh(testGeo, testMat);
+  testMesh.position.set(250, 100, 0);
+  scene.add(testMesh);
+  objects3D.push(testMesh);
+
   function animate3D() {
     requestAnimationFrame(animate3D);
 
     objects3D.forEach(obj => {
-      obj.rotation.y += 0.015;
-      obj.rotation.x += 0.01;
+      obj.rotation.y += 0.012;
+      obj.rotation.x += 0.008;
     });
 
     if (previewMesh3D) {
@@ -316,6 +324,12 @@ html_code = r"""
     renderer.render(scene, camera);
   }
   animate3D();
+
+  // Set initial UI state to match 3D
+  document.getElementById('btn-mode-2d').classList.remove('active');
+  document.getElementById('btn-mode-3d').classList.add('active');
+  document.getElementById('group-2d-tools').style.display = 'none';
+  document.getElementById('group-3d-tools').style.display = 'flex';
 
   function switchMode(mode) {
     activeMode = mode;
@@ -333,7 +347,7 @@ html_code = r"""
     } else {
       group2D.style.display = 'none';
       group3D.style.display = 'flex';
-      setTool('sphere');
+      setTool('cube');
     }
   }
 
@@ -363,8 +377,6 @@ html_code = r"""
 
     if (previewMesh3D) {
       scene.remove(previewMesh3D);
-      if (previewMesh3D.geometry) previewMesh3D.geometry.dispose();
-      if (previewMesh3D.material) previewMesh3D.material.dispose();
       previewMesh3D = null;
     }
   }
@@ -374,15 +386,14 @@ html_code = r"""
   }
 
   function mapScreenTo3D(screenX, screenY) {
-    // Map screen (0..1100, 0..650) to Three.js centered coordinates
-    const x = (screenX - 550) * 0.8;
-    const y = -(screenY - 325) * 0.8;
+    const x = (screenX - 550) * 0.9;
+    const y = -(screenY - 325) * 0.9;
     return new THREE.Vector3(x, y, 0);
   }
 
   function create3DShape(type, size, pos) {
     let geometry;
-    const s = Math.max(size, 40);
+    const s = Math.max(size, 50);
 
     if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
@@ -395,8 +406,8 @@ html_code = r"""
     }
 
     const material = new THREE.MeshPhongMaterial({
-      color: 0x00f0ff,
-      emissive: 0x003344,
+      color: 0x10b981,
+      emissive: 0x064e3b,
       specular: 0xffffff,
       shininess: 100,
       side: THREE.DoubleSide
@@ -404,18 +415,11 @@ html_code = r"""
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(pos);
-
-    // Add bright wireframe overlay
-    const wireGeo = new THREE.WireframeGeometry(geometry);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff });
-    const wireframe = new THREE.LineSegments(wireGeo, wireMat);
-    mesh.add(wireframe);
-
     return mesh;
   }
 
   function update3DPreview(start, end) {
-    const size = Math.max(getDistance(start, end), 50);
+    const size = Math.max(getDistance(start, end), 60);
     const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
     if (previewMesh3D) {
@@ -492,14 +496,15 @@ html_code = r"""
       );
 
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
-      const currentlyPinching = pinchDist < 45;
+      
+      // Relaxed threshold to < 55px to ensure reliable triggering
+      const currentlyPinching = pinchDist < 55;
 
-      // Draw hand pointer on 2D canvas
       ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
       ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
-      ctx2D.shadowBlur = 10;
+      ctx2D.shadowBlur = 12;
       ctx2D.beginPath();
-      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 8, 0, 2 * Math.PI);
+      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 9, 0, 2 * Math.PI);
       ctx2D.fill();
       ctx2D.shadowBlur = 0;
 
