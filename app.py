@@ -69,7 +69,7 @@ html_code = r"""
       top: 0;
       left: 0;
       z-index: 2;
-      pointer-events: none;
+      pointer-events: auto;
     }
 
     #ui-panel {
@@ -269,8 +269,8 @@ html_code = r"""
 
   // --- Three.js Engine Setup ---
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1100 / 650, 1, 3000);
-  camera.position.set(0, 0, 700);
+  const camera = new THREE.PerspectiveCamera(60, 1100 / 650, 0.1, 5000);
+  camera.position.set(0, 0, 800);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
@@ -278,15 +278,15 @@ html_code = r"""
   renderer.setPixelRatio(window.devicePixelRatio);
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
-  mainLight.position.set(300, 500, 400);
+  const mainLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
+  mainLight.position.set(400, 600, 500);
   scene.add(mainLight);
 
-  const fillLight = new THREE.DirectionalLight(0x10b981, 0.8);
-  fillLight.position.set(-300, -300, 200);
+  const fillLight = new THREE.DirectionalLight(0x10b981, 1.0);
+  fillLight.position.set(-400, -400, 300);
   scene.add(fillLight);
 
   const objects3D = [];
@@ -311,7 +311,6 @@ html_code = r"""
   function switchMode(mode) {
     activeMode = mode;
     
-    // Fix active class toggling
     document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3D');
 
@@ -332,7 +331,6 @@ html_code = r"""
   function setTool(tool) {
     currentTool = tool.toLowerCase();
     
-    // Remove active class from all tool buttons
     document.querySelectorAll('#group-2d-tools button, #group-3d-tools button').forEach(btn => {
       btn.classList.remove('active');
     });
@@ -374,7 +372,7 @@ html_code = r"""
     vector.unproject(camera);
 
     const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
+    const distance = 800; // Fixed depth from camera plane for stable 3D placement
     return camera.position.clone().add(dir.multiplyScalar(distance));
   }
 
@@ -382,7 +380,7 @@ html_code = r"""
     return new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       roughness: 0.2,
-      metalness: 0.5,
+      metalness: 0.6,
       emissive: 0x003344,
       wireframe: false,
       side: THREE.DoubleSide
@@ -390,7 +388,7 @@ html_code = r"""
   }
 
   function update3DPreview(start, end) {
-    const dragDistance = Math.max(getDistance(start, end), 20);
+    const dragDistance = Math.max(getDistance(start, end), 30);
     const centerPt = mapScreenTo3DWorld((start.x + end.x) / 2, (start.y + end.y) / 2);
 
     if (previewMesh3D) {
@@ -402,11 +400,11 @@ html_code = r"""
     let geometry;
 
     if (currentTool === 'sphere') {
-      geometry = new THREE.SphereGeometry(dragDistance / 2, 32, 32);
+      geometry = new THREE.SphereGeometry(dragDistance, 32, 32);
     } else if (currentTool === 'cube') {
-      geometry = new THREE.BoxGeometry(dragDistance, dragDistance, dragDistance);
+      geometry = new THREE.BoxGeometry(dragDistance * 1.5, dragDistance * 1.5, dragDistance * 1.5);
     } else if (currentTool === 'cone') {
-      geometry = new THREE.ConeGeometry(dragDistance / 2, dragDistance, 32);
+      geometry = new THREE.ConeGeometry(dragDistance, dragDistance * 2, 32);
     } else if (currentTool === 'extrude' && activeDrawnPath.length > 3) {
       const shape = new THREE.Shape();
       const firstPt = mapScreenTo3DWorld(activeDrawnPath[0].x, activeDrawnPath[0].y);
@@ -418,10 +416,10 @@ html_code = r"""
       }
       shape.closePath();
 
-      const extrudeSettings = { steps: 1, depth: Math.max(dragDistance / 2, 15), bevelEnabled: true, bevelThickness: 2, bevelSize: 2 };
+      const extrudeSettings = { steps: 1, depth: Math.max(dragDistance, 30), bevelEnabled: true, bevelThickness: 4, bevelSize: 2 };
       geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     } else {
-      geometry = new THREE.SphereGeometry(dragDistance / 2, 32, 32);
+      geometry = new THREE.SphereGeometry(dragDistance, 32, 32);
     }
 
     previewMesh3D = new THREE.Mesh(geometry, create3DMaterial());
@@ -580,7 +578,7 @@ html_code = r"""
   });
 
   cameraMedia.start().then(() => {
-    statusBarText.innerText = "Tracking Active (2D)";
+    statusBarText.innerText = "Tracking Active (3D)";
   }).catch((err) => {
     statusBarText.innerText = "Camera Access Denied/Failed";
     console.error(err);
