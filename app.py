@@ -128,6 +128,29 @@ html_code = f"""
       gap: 6px;
     }}
 
+    .color-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }}
+
+    .color-btn {{
+      height: 24px;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }}
+
+    .color-btn:hover {{
+      transform: scale(1.08);
+    }}
+
+    .color-btn.active {{
+      border-color: #ffffff !important;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }}
+
     button {{
       background: #1f2937;
       color: #9ca3af;
@@ -238,6 +261,21 @@ html_code = f"""
       </div>
     </div>
 
+    <!-- 8 Basic Colors Palette -->
+    <div class="ui-group">
+      <span class="ui-label">Color Palette</span>
+      <div class="color-grid">
+        <div class="color-btn active" style="background-color: #10b981;" onclick="setColor('#10b981', this)"></div>
+        <div class="color-btn" style="background-color: #3b82f6;" onclick="setColor('#3b82f6', this)"></div>
+        <div class="color-btn" style="background-color: #ef4444;" onclick="setColor('#ef4444', this)"></div>
+        <div class="color-btn" style="background-color: #eab308;" onclick="setColor('#eab308', this)"></div>
+        <div class="color-btn" style="background-color: #06b6d4;" onclick="setColor('#06b6d4', this)"></div>
+        <div class="color-btn" style="background-color: #d946ef;" onclick="setColor('#d946ef', this)"></div>
+        <div class="color-btn" style="background-color: #f97316;" onclick="setColor('#f97316', this)"></div>
+        <div class="color-btn" style="background-color: #ffffff;" onclick="setColor('#ffffff', this)"></div>
+      </div>
+    </div>
+
     <div class="ui-group" id="group-2d-tools" style="display: none;">
       <span class="ui-label">2D Sketching</span>
       <div class="btn-grid">
@@ -298,6 +336,7 @@ html_code = f"""
 
   let activeMode = '3D';
   let currentTool = 'cube';
+  let currentColor = '#10b981';
   let isPinching = false;
   let startPinchPoint = null;
   let lastPinchPoint = null;
@@ -354,6 +393,17 @@ html_code = f"""
 
   const objects3D = [];
   let previewMesh3D = null;
+
+  function setColor(colorHex, el) {{
+    currentColor = colorHex;
+    document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    // If an object is selected in 3D mode, update its color
+    if (selectedObject && activeMode === '3D' && selectedObject.material) {{
+      selectedObject.material.color.set(currentColor);
+    }}
+  }}
 
   function setHighlight(mesh, isSelected) {{
     if (!mesh || !mesh.material) return;
@@ -430,7 +480,7 @@ html_code = f"""
     const targetScale = 80 / (maxDim || 1);
 
     const material = new THREE.MeshPhongMaterial({{
-      color: 0x10b981,
+      color: currentColor,
       emissive: 0x042f2e,
       specular: 0xffffff,
       shininess: 100
@@ -545,8 +595,11 @@ html_code = f"""
 
   // --- 2D Drawing Utilities ---
   function draw2DShape(ctx, shape) {{
-    ctx.strokeStyle = '#10b981';
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+    const strokeColor = shape.color || '#10b981';
+    ctx.strokeStyle = strokeColor;
+    
+    // Convert hex color to semi-transparent fill
+    ctx.fillStyle = strokeColor + '40';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -608,7 +661,7 @@ html_code = f"""
     }}
 
     const material = new THREE.MeshPhongMaterial({{
-      color: 0x10b981,
+      color: currentColor,
       emissive: 0x042f2e,
       specular: 0xffffff,
       shininess: 100
@@ -630,7 +683,6 @@ html_code = f"""
       selectedObject.position.x = pos3D.x;
       selectedObject.position.y = pos3D.y;
     }} else if (currentTool === 'resize') {{
-      // Dragging right/up expands, left/down shrinks
       const scaleDelta = (dx - dy) * 0.01;
       const currentScale = selectedObject.scale.x;
       const newScale = Math.max(0.1, currentScale + scaleDelta);
@@ -729,6 +781,7 @@ html_code = f"""
           }} else {{
             currentPreviewShape = {{
               tool: currentTool,
+              color: currentColor,
               start: {{ x: smoothedCursor.x, y: smoothedCursor.y }},
               end: {{ x: smoothedCursor.x, y: smoothedCursor.y }},
               points: currentTool === 'free' ? [{{ x: smoothedCursor.x, y: smoothedCursor.y }}] : null
