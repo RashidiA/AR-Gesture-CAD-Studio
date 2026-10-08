@@ -310,8 +310,8 @@ html_code = r"""
 
   function switchMode(mode) {
     activeMode = mode;
-    clearCanvas();
-
+    
+    // Fix active class toggling
     document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3D');
 
@@ -331,9 +331,16 @@ html_code = r"""
 
   function setTool(tool) {
     currentTool = tool.toLowerCase();
-    document.querySelectorAll('.btn-grid button').forEach(btn => btn.classList.remove('active'));
+    
+    // Remove active class from all tool buttons
+    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+
     const activeBtn = document.getElementById(`btn-${currentTool}`);
-    if (activeBtn) activeBtn.classList.add('active');
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
   }
 
   function clearCanvas() {
