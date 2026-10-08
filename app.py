@@ -46,38 +46,18 @@ html_code = r"""
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-      background: #111827;
+      background: #0d0f12;
     }
     video {
+      display: none; /* Video runs hidden in background; Three.js renders it */
+    }
+    #webgl-canvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 1100px;
       height: 650px;
-      object-fit: cover;
-      transform: scaleX(-1);
       z-index: 1;
-    }
-    #canvas-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 1100px;
-      height: 650px;
-      z-index: 2;
-      pointer-events: none;
-    }
-    #2d-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-    }
-    #3d-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 3;
     }
 
     #ui-panel {
@@ -207,21 +187,18 @@ html_code = r"""
 
 <div id="studio-container">
   <video id="webcam" playsinline autoplay muted></video>
-  <div id="canvas-container">
-    <canvas id="2d-canvas" width="1100" height="650"></canvas>
-    <canvas id="3d-canvas" width="1100" height="650"></canvas>
-  </div>
+  <canvas id="webgl-canvas" width="1100" height="650"></canvas>
 
   <div id="ui-panel">
     <div class="ui-group">
       <span class="ui-label">Mode Selection</span>
       <div class="btn-grid">
-        <button id="btn-mode-2d" class="active" onclick="switchMode('2D')">2D Canvas</button>
-        <button id="btn-mode-3d" onclick="switchMode('3D')">3D Engine</button>
+        <button id="btn-mode-2d" onclick="switchMode('2D')">2D Canvas</button>
+        <button id="btn-mode-3d" class="active" onclick="switchMode('3D')">3D Engine</button>
       </div>
     </div>
 
-    <div class="ui-group" id="group-2d-tools">
+    <div class="ui-group" id="group-2d-tools" style="display: none;">
       <span class="ui-label">2D Sketching</span>
       <div class="btn-grid">
         <button id="btn-free" class="active" onclick="setTool('free')">Freehand</button>
@@ -231,7 +208,7 @@ html_code = r"""
       </div>
     </div>
 
-    <div class="ui-group" id="group-3d-tools" style="display: none;">
+    <div class="ui-group" id="group-3d-tools">
       <span class="ui-label">3D Primitives & CAD</span>
       <div class="btn-grid">
         <button id="btn-sphere" onclick="setTool('sphere')">Sphere</button>
@@ -257,37 +234,45 @@ html_code = r"""
 
 <script>
   const videoElement = document.getElementById('webcam');
-  const canvas2D = document.getElementById('2d-canvas');
-  const ctx2D = canvas2D.getContext('2d');
-  const canvas3D = document.getElementById('3d-canvas');
+  const canvasWebGL = document.getElementById('webgl-canvas');
   const statusBarText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
   const pinchIndicator = document.getElementById('pinch-indicator');
 
-  let activeMode = '3D'; // Default to 3D so you can test right away
+  let activeMode = '3D';
   let currentTool = 'cube';
   let isPinching = false;
   let startPinchPoint = null;
   let currentPinchPoint = null;
-  let activeDrawnPath = [];
 
-  let smoothedCursor = { x: 550, y: 325 };
+  let smoothedCursor = { x: 0, y: 0 };
   const alpha = 0.35;
 
-  const shapes2D = [];
-
-  // --- Three.js Engine Setup ---
+  // --- Three.js Single Scene & Renderer Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1100 / 650, 1, 2000);
   camera.position.set(0, 0, 600);
 
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0);
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasWebGL, antialias: true, alpha: false });
   renderer.setSize(1100, 650);
   renderer.setPixelRatio(window.devicePixelRatio);
 
-  // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+  // --- Background Video Stream Mesh ---
+  const videoTexture = new THREE.VideoTexture(videoElement);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBAFormat;
+
+  const bgGeo = new THREE.PlaneGeometry(1000, 590);
+  // Mirror video horizontally to match webcam feel
+  const bgMat = new THREE.MeshBasicMaterial({ map: videoTexture, depthTest: false, depthWrite: false });
+  const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+  bgMesh.scale.x = -1; // Horizontal flip
+  bgMesh.position.set(0, 0, -500);
+  scene.add(bgMesh);
+
+  // --- Lighting ---
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
   scene.add(ambientLight);
 
   const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 2.5);
@@ -298,19 +283,21 @@ html_code = r"""
   dirLight2.position.set(-300, -400, 300);
   scene.add(dirLight2);
 
+  // --- 3D Hand Cursor Marker ---
+  const cursorGeo = new THREE.SphereGeometry(10, 16, 16);
+  const cursorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+  const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
+  scene.add(cursorMesh);
+
   const objects3D = [];
   let previewMesh3D = null;
 
-  // Add a test cube immediately in the center so Three.js rendering is confirmed working
-  const testGeo = new THREE.BoxGeometry(90, 90, 90);
-  const testMat = new THREE.MeshPhongMaterial({ color: 0x00f0ff, shininess: 100 });
-  const testMesh = new THREE.Mesh(testGeo, testMat);
-  testMesh.position.set(250, 100, 0);
-  scene.add(testMesh);
-  objects3D.push(testMesh);
-
   function animate3D() {
     requestAnimationFrame(animate3D);
+
+    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+      videoTexture.needsUpdate = true;
+    }
 
     objects3D.forEach(obj => {
       obj.rotation.y += 0.012;
@@ -325,35 +312,19 @@ html_code = r"""
   }
   animate3D();
 
-  // Set initial UI state to match 3D
-  document.getElementById('btn-mode-2d').classList.remove('active');
-  document.getElementById('btn-mode-3d').classList.add('active');
-  document.getElementById('group-2d-tools').style.display = 'none';
-  document.getElementById('group-3d-tools').style.display = 'flex';
-
   function switchMode(mode) {
     activeMode = mode;
-    
     document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3D');
 
-    const group2D = document.getElementById('group-2d-tools');
-    const group3D = document.getElementById('group-3d-tools');
+    document.getElementById('group-2d-tools').style.display = mode === '2D' ? 'flex' : 'none';
+    document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
 
-    if (mode === '2D') {
-      group2D.style.display = 'flex';
-      group3D.style.display = 'none';
-      setTool('free');
-    } else {
-      group2D.style.display = 'none';
-      group3D.style.display = 'flex';
-      setTool('cube');
-    }
+    setTool(mode === '2D' ? 'free' : 'cube');
   }
 
   function setTool(tool) {
     currentTool = tool.toLowerCase();
-    
     document.querySelectorAll('#group-2d-tools button, #group-3d-tools button').forEach(btn => {
       btn.classList.remove('active');
     });
@@ -365,9 +336,6 @@ html_code = r"""
   }
 
   function clearCanvas() {
-    ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-    shapes2D.length = 0;
-
     objects3D.forEach(obj => {
       scene.remove(obj);
       if (obj.geometry) obj.geometry.dispose();
@@ -386,14 +354,14 @@ html_code = r"""
   }
 
   function mapScreenTo3D(screenX, screenY) {
-    const x = (screenX - 550) * 0.9;
-    const y = -(screenY - 325) * 0.9;
+    const x = (screenX - 550) * 0.75;
+    const y = -(screenY - 325) * 0.75;
     return new THREE.Vector3(x, y, 0);
   }
 
   function create3DShape(type, size, pos) {
     let geometry;
-    const s = Math.max(size, 50);
+    const s = Math.max(size, 60);
 
     if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
@@ -407,10 +375,9 @@ html_code = r"""
 
     const material = new THREE.MeshPhongMaterial({
       color: 0x10b981,
-      emissive: 0x064e3b,
+      emissive: 0x042f2e,
       specular: 0xffffff,
-      shininess: 100,
-      side: THREE.DoubleSide
+      shininess: 100
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -437,44 +404,7 @@ html_code = r"""
     }
   }
 
-  function renderSingle2DShape(shape) {
-    if (!shape.start || !shape.end) return;
-
-    ctx2D.strokeStyle = shape.color || '#38bdf8';
-    ctx2D.lineWidth = 4;
-    ctx2D.lineCap = 'round';
-    ctx2D.lineJoin = 'round';
-    ctx2D.beginPath();
-
-    if (shape.type === 'free' || shape.type === 'extrude') {
-      if (shape.path && shape.path.length > 0) {
-        ctx2D.moveTo(shape.path[0].x, shape.path[0].y);
-        shape.path.forEach(pt => ctx2D.lineTo(pt.x, pt.y));
-      }
-    } else if (shape.type === 'rectangle') {
-      const w = shape.end.x - shape.start.x;
-      const h = shape.end.y - shape.start.y;
-      ctx2D.rect(shape.start.x, shape.start.y, w, h);
-    } else if (shape.type === 'circle') {
-      const r = getDistance(shape.start, shape.end);
-      ctx2D.arc(shape.start.x, shape.start.y, r, 0, 2 * Math.PI);
-    } else if (shape.type === 'triangle') {
-      const topX = (shape.start.x + shape.end.x) / 2;
-      ctx2D.moveTo(topX, shape.start.y);
-      ctx2D.lineTo(shape.start.x, shape.end.y);
-      ctx2D.lineTo(shape.end.x, shape.end.y);
-      ctx2D.closePath();
-    }
-    ctx2D.stroke();
-  }
-
   function onResults(results) {
-    ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-
-    if (activeMode === '2D') {
-      shapes2D.forEach(renderSingle2DShape);
-    }
-
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       statusDot.classList.add('active');
       const landmarks = results.multiHandLandmarks[0];
@@ -490,6 +420,9 @@ html_code = r"""
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
+      const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
+      cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+
       const pinchDist = getDistance(
         { x: rawCursorX, y: rawCursorY },
         { x: rawThumbX, y: rawThumbY }
@@ -497,66 +430,33 @@ html_code = r"""
 
       pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
       
-      // Relaxed threshold to < 55px to ensure reliable triggering
-      const currentlyPinching = pinchDist < 55;
-
-      ctx2D.fillStyle = currentlyPinching ? '#10b981' : '#38bdf8';
-      ctx2D.shadowColor = currentlyPinching ? '#10b981' : '#38bdf8';
-      ctx2D.shadowBlur = 12;
-      ctx2D.beginPath();
-      ctx2D.arc(smoothedCursor.x, smoothedCursor.y, 9, 0, 2 * Math.PI);
-      ctx2D.fill();
-      ctx2D.shadowBlur = 0;
+      const currentlyPinching = pinchDist < 60; // Increased threshold for instant response
+      cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
 
       if (currentlyPinching) {
         if (!isPinching) {
           isPinching = true;
           startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
           currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          activeDrawnPath = [{ x: smoothedCursor.x, y: smoothedCursor.y }];
           statusBarText.innerText = `Drawing [${activeMode} - ${currentTool.toUpperCase()}]`;
 
-          if (activeMode === '3D') {
-            update3DPreview(startPinchPoint, currentPinchPoint);
-          }
+          update3DPreview(startPinchPoint, currentPinchPoint);
         } else {
           currentPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          activeDrawnPath.push(currentPinchPoint);
-
-          if (activeMode === '3D') {
-            update3DPreview(startPinchPoint, currentPinchPoint);
-          } else {
-            renderSingle2DShape({
-              type: currentTool,
-              start: startPinchPoint,
-              end: currentPinchPoint,
-              path: activeDrawnPath,
-              color: '#10b981'
-            });
-          }
+          update3DPreview(startPinchPoint, currentPinchPoint);
         }
       } else {
         if (isPinching) {
           isPinching = false;
           statusBarText.innerText = `Tracking Active (${activeMode})`;
-
-          if (activeMode === '3D') {
-            finalize3DSolid();
-          } else {
-            shapes2D.push({
-              type: currentTool,
-              start: { ...startPinchPoint },
-              end: { ...currentPinchPoint },
-              path: [...activeDrawnPath],
-              color: '#38bdf8'
-            });
-          }
+          finalize3DSolid();
         }
       }
     } else {
       statusDot.classList.remove('active');
       statusBarText.innerText = "Searching for hand...";
       pinchIndicator.innerText = "Pinch Distance: --";
+      cursorMesh.position.set(2000, 2000, 0); // Hide offscreen
     }
   }
 
@@ -567,8 +467,8 @@ html_code = r"""
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
-    minDetectionConfidence: 0.65,
-    minTrackingConfidence: 0.65
+    minDetectionConfidence: 0.60,
+    minTrackingConfidence: 0.60
   });
 
   hands.onResults(onResults);
