@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 st.title("🎨 AR Gesture CAD Studio (2D & 3D AR)")
-st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL 3D CAD Engine & 2D AR Sketcher")
+st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine (AutoCAD Style)")
 
 # --- STL File Uploader in Streamlit ---
 uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)", type=["stl"])
@@ -88,7 +88,7 @@ html_code = f"""
       top: 20px;
       left: 20px;
       z-index: 10;
-      background: rgba(17, 24, 39, 0.85);
+      background: rgba(17, 24, 39, 0.88);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.12);
@@ -265,13 +265,13 @@ html_code = f"""
     <div class="ui-group">
       <span class="ui-label">Color Palette</span>
       <div class="color-grid">
-        <div class="color-btn active" style="background-color: #10b981;" onclick="setColor('#10b981', this)"></div>
-        <div class="color-btn" style="background-color: #3b82f6;" onclick="setColor('#3b82f6', this)"></div>
+        <div class="color-btn active" style="background-color: #38bdf8;" onclick="setColor('#38bdf8', this)"></div>
+        <div class="color-btn" style="background-color: #10b981;" onclick="setColor('#10b981', this)"></div>
         <div class="color-btn" style="background-color: #ef4444;" onclick="setColor('#ef4444', this)"></div>
         <div class="color-btn" style="background-color: #eab308;" onclick="setColor('#eab308', this)"></div>
-        <div class="color-btn" style="background-color: #06b6d4;" onclick="setColor('#06b6d4', this)"></div>
-        <div class="color-btn" style="background-color: #d946ef;" onclick="setColor('#d946ef', this)"></div>
+        <div class="color-btn" style="background-color: #a855f7;" onclick="setColor('#a855f7', this)"></div>
         <div class="color-btn" style="background-color: #f97316;" onclick="setColor('#f97316', this)"></div>
+        <div class="color-btn" style="background-color: #64748b;" onclick="setColor('#64748b', this)"></div>
         <div class="color-btn" style="background-color: #ffffff;" onclick="setColor('#ffffff', this)"></div>
       </div>
     </div>
@@ -336,7 +336,7 @@ html_code = f"""
 
   let activeMode = '3D';
   let currentTool = 'cube';
-  let currentColor = '#10b981';
+  let currentColor = '#38bdf8';
   let isPinching = false;
   let startPinchPoint = null;
   let lastPinchPoint = null;
@@ -373,17 +373,17 @@ html_code = f"""
   bgMesh.position.set(0, 0, -500);
   scene.add(bgMesh);
 
-  // --- Lighting ---
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+  // --- AutoCAD Studio Balanced Lighting ---
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
 
-  const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 2.5);
-  dirLight1.position.set(300, 400, 500);
-  scene.add(dirLight1);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  keyLight.position.set(400, 500, 500);
+  scene.add(keyLight);
 
-  const dirLight2 = new THREE.DirectionalLight(0xff00ff, 1.8);
-  dirLight2.position.set(-300, -400, 300);
-  scene.add(dirLight2);
+  const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
+  fillLight.position.set(-400, -300, 300);
+  scene.add(fillLight);
 
   // --- 3D Cursor ---
   const cursorGeo = new THREE.SphereGeometry(3, 16, 16);
@@ -394,12 +394,20 @@ html_code = f"""
   const objects3D = [];
   let previewMesh3D = null;
 
+  function attachAutoCADEdges(mesh) {{
+    // Create sharp technical CAD outline edges (AutoCAD / SolidWorks Style)
+    const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 25);
+    const edgesMat = new THREE.LineBasicMaterial({{ color: 0x0f172a, linewidth: 1.5 }});
+    const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
+    edgeLines.name = "cadEdgeLines";
+    mesh.add(edgeLines);
+  }}
+
   function setColor(colorHex, el) {{
     currentColor = colorHex;
     document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('active'));
     if (el) el.classList.add('active');
 
-    // If an object is selected in 3D mode, update its color
     if (selectedObject && activeMode === '3D' && selectedObject.material) {{
       selectedObject.material.color.set(currentColor);
     }}
@@ -407,10 +415,13 @@ html_code = f"""
 
   function setHighlight(mesh, isSelected) {{
     if (!mesh || !mesh.material) return;
+    const edgeLines = mesh.getObjectByName("cadEdgeLines");
     if (isSelected) {{
-      mesh.material.emissive.setHex(0xf59e0b);
+      mesh.material.emissive.setHex(0x1e293b);
+      if (edgeLines) edgeLines.material.color.setHex(0xf59e0b); // Gold CAD outline selection
     }} else {{
-      mesh.material.emissive.setHex(0x042f2e);
+      mesh.material.emissive.setHex(0x000000);
+      if (edgeLines) edgeLines.material.color.setHex(0x0f172a); // Technical dark CAD edge
     }}
   }}
 
@@ -424,7 +435,7 @@ html_code = f"""
     objects3D.forEach(obj => {{
       obj.visible = (activeMode === '3D');
       if (activeMode === '3D' && obj !== selectedObject) {{
-        obj.rotation.y += 0.005;
+        obj.rotation.y += 0.003;
       }}
     }});
 
@@ -459,7 +470,7 @@ html_code = f"""
   }}
   animateEngine();
 
-  // --- Load STL File from Streamlit ---
+  // --- Load STL File from Streamlit with AutoCAD CAD Shader Pipeline ---
   const stlBase64 = "{stl_b64}";
   if (stlBase64.length > 0) {{
     const binaryStl = atob(stlBase64);
@@ -477,18 +488,22 @@ html_code = f"""
     const sizeVec = new THREE.Vector3();
     boundingBox.getSize(sizeVec);
     const maxDim = Math.max(sizeVec.x, sizeVec.y, sizeVec.z);
-    const targetScale = 80 / (maxDim || 1);
+    const targetScale = 120 / (maxDim || 1);
 
-    const material = new THREE.MeshPhongMaterial({{
+    // Realistic CAD Material (MeshStandardMaterial with defined roughness and metalness)
+    const material = new THREE.MeshStandardMaterial({{
       color: currentColor,
-      emissive: 0x042f2e,
-      specular: 0xffffff,
-      shininess: 100
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x000000,
+      side: THREE.DoubleSide
     }});
 
     const stlMesh = new THREE.Mesh(geometry, material);
     stlMesh.scale.set(targetScale, targetScale, targetScale);
     stlMesh.position.set(0, 0, 0);
+
+    attachAutoCADEdges(stlMesh);
 
     scene.add(stlMesh);
     objects3D.push(stlMesh);
@@ -595,10 +610,8 @@ html_code = f"""
 
   // --- 2D Drawing Utilities ---
   function draw2DShape(ctx, shape) {{
-    const strokeColor = shape.color || '#10b981';
+    const strokeColor = shape.color || '#38bdf8';
     ctx.strokeStyle = strokeColor;
-    
-    // Convert hex color to semi-transparent fill
     ctx.fillStyle = strokeColor + '40';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
@@ -660,15 +673,17 @@ html_code = f"""
       geometry = new THREE.CylinderGeometry(s / 1.5, s / 1.5, s, 32);
     }}
 
-    const material = new THREE.MeshPhongMaterial({{
+    const material = new THREE.MeshStandardMaterial({{
       color: currentColor,
-      emissive: 0x042f2e,
-      specular: 0xffffff,
-      shininess: 100
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x000000,
+      side: THREE.DoubleSide
     }});
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(pos);
+    attachAutoCADEdges(mesh);
     return mesh;
   }}
 
