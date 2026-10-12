@@ -36,7 +36,6 @@ html_code = """
   <!-- Three.js Engine & STLLoader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-  <!-- Three.js BufferGeometryUtils for robust mesh combination -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 
   <style>
@@ -357,6 +356,7 @@ html_code = """
   let lastPinchPoint = null;
 
   let selectedObject = null;
+  let hoveredFaceMarker = null;
   const raycaster = new THREE.Raycaster();
   const mouse2D = new THREE.Vector2();
 
@@ -399,6 +399,13 @@ html_code = """
   const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
   fillLight.position.set(-400, -300, 300);
   scene.add(fillLight);
+
+  // --- Yellow Hover Face Indicator ---
+  const markerGeo = new THREE.BoxGeometry(15, 15, 2);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xeab308, wireframe: false });
+  hoveredFaceMarker = new THREE.Mesh(markerGeo, markerMat);
+  hoveredFaceMarker.visible = false;
+  scene.add(hoveredFaceMarker);
 
   // --- 3D Cursor ---
   const cursorGeo = new THREE.SphereGeometry(3, 16, 16);
@@ -450,6 +457,29 @@ html_code = """
     const radius = Math.round(Math.max(size.x, size.z) * 0.75);
 
     pinchIndicator.innerText = `L:${depth}mm | H:${height}mm | W:${width}mm | R:${radius}mm`;
+  }
+
+  function checkFaceHover(screenX, screenY) {
+    if (currentTool !== 'extrude') {
+      if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
+      return;
+    }
+
+    mouse2D.x = (screenX / 1280) * 2 - 1;
+    mouse2D.y = -(screenY / 720) * 2 + 1;
+
+    raycaster.setFromCamera(mouse2D, camera);
+    const intersects = raycaster.intersectObjects(objects3D);
+
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      selectedObject = hit.object;
+      hoveredFaceMarker.position.copy(hit.point);
+      hoveredFaceMarker.visible = true;
+      statusBarText.innerText = "Face Target Acquired (Yellow)";
+    } else {
+      hoveredFaceMarker.visible = false;
+    }
   }
 
   function animateEngine() {
@@ -574,6 +604,10 @@ html_code = """
     if (activeBtn) {
       activeBtn.classList.add('active');
     }
+
+    if (currentTool !== 'extrude' && hoveredFaceMarker) {
+      hoveredFaceMarker.visible = false;
+    }
   }
 
   function deleteSelectedObject() {
@@ -586,6 +620,7 @@ html_code = """
       if (selectedObject.geometry) selectedObject.geometry.dispose();
       if (selectedObject.material) selectedObject.material.dispose();
       selectedObject = null;
+      if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
       statusBarText.innerText = "Selected Object Deleted";
       pinchIndicator.innerText = "Pinch Distance: --";
     }
@@ -704,6 +739,7 @@ html_code = """
       });
       objects3D.length = 0;
       selectedObject = null;
+      if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
 
       if (previewMesh3D) {
         scene.remove(previewMesh3D);
@@ -846,7 +882,7 @@ html_code = """
       selectedObject.scale.set(newScale, newScale, newScale);
       updateMeasurements(selectedObject);
     } else if (currentTool === 'extrude') {
-      const scaleDeltaZ = dy * 0.03;
+      const scaleDeltaZ = dy * 0.04;
       const currentScaleZ = selectedObject.scale.z;
       const newScaleZ = Math.max(0.1, currentScaleZ + scaleDeltaZ);
       selectedObject.scale.set(selectedObject.scale.x, selectedObject.scale.y, newScaleZ);
@@ -920,6 +956,7 @@ html_code = """
       if (activeMode === '3D') {
         const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
         cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+        checkFaceHover(smoothedCursor.x, smoothedCursor.y);
       }
 
       const pinchDist = getDistance(
@@ -980,6 +1017,7 @@ html_code = """
       }
       if (activeMode === '3D') {
         cursorMesh.position.set(2000, 2000, 0);
+        if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
       }
     }
   }
