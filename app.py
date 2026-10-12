@@ -704,11 +704,10 @@ html_code = """
 
       const center = new THREE.Vector3();
       intersectionBox.getCenter(center);
-      const size = new THREE.Vector3();
-      intersectionBox.getSize(size);
 
-      // Create exact intersection volume geometry matching the overlap region
-      let intersectGeometry = new THREE.BoxGeometry(Math.max(size.x, 10), Math.max(size.y, 10), Math.max(size.z, 10));
+      // Retain exact geometry shape profile of the primary selected object
+      let intersectGeometry = obj1.geometry.clone();
+      intersectGeometry.scale(0.65, 0.65, 0.65);
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
@@ -757,11 +756,10 @@ html_code = """
 
       const center1 = new THREE.Vector3();
       box1.getCenter(center1);
-      const size1 = new THREE.Vector3();
-      box1.getSize(size1);
 
-      // Create modified subtraction shell geometry
-      let subGeometry = new THREE.BoxGeometry(size1.x * 0.9, size1.y * 0.9, size1.z * 0.9);
+      // Retain the base shape profile of the primary selected object with pocket scaling
+      let subGeometry = obj1.geometry.clone();
+      subGeometry.scale(0.8, 0.8, 0.8);
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
