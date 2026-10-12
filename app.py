@@ -22,7 +22,7 @@ if uploaded_file is not None:
     stl_filename = uploaded_file.name
     st.success(f"Loaded STL model: {stl_filename}")
 
-html_code = f"""
+html_code = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -38,19 +38,19 @@ html_code = f"""
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 
   <style>
-    * {{
+    * {
       box-sizing: border-box;
       user-select: none;
-    }}
-    body {{
+    }
+    body {
       margin: 0;
       padding: 0;
       background-color: #0d0f12;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
       color: #e2e8f0;
-    }}
-    #studio-container {{
+    }
+    #studio-container {
       position: relative;
       width: 1280px;
       height: 720px;
@@ -60,19 +60,19 @@ html_code = f"""
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
       background: #0d0f12;
-    }}
-    video {{
+    }
+    video {
       display: none;
-    }}
-    #webgl-canvas {{
+    }
+    #webgl-canvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 1280px;
       height: 720px;
       z-index: 1;
-    }}
-    #sketch-canvas {{
+    }
+    #sketch-canvas {
       position: absolute;
       top: 0;
       left: 0;
@@ -81,9 +81,9 @@ html_code = f"""
       z-index: 2;
       pointer-events: none;
       display: none;
-    }}
+    }
 
-    #ui-panel {{
+    #ui-panel {
       position: absolute;
       top: 20px;
       left: 20px;
@@ -100,58 +100,58 @@ html_code = f"""
       width: 260px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
-    }}
+    }
 
-    .ui-group {{
+    .ui-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
-    }}
+    }
 
-    .ui-label {{
+    .ui-label {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       color: #38bdf8;
       letter-spacing: 1.2px;
-    }}
+    }
 
-    .btn-grid {{
+    .btn-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
-    }}
+    }
 
-    .btn-grid-3 {{
+    .btn-grid-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
-    }}
+    }
 
-    .color-grid {{
+    .color-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
-    }}
+    }
 
-    .color-btn {{
+    .color-btn {
       height: 24px;
       border-radius: 6px;
       border: 2px solid transparent;
       cursor: pointer;
       transition: all 0.2s ease;
-    }}
+    }
 
-    .color-btn:hover {{
+    .color-btn:hover {
       transform: scale(1.08);
-    }}
+    }
 
-    .color-btn.active {{
+    .color-btn.active {
       border-color: #ffffff !important;
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-    }}
+    }
 
-    button {{
+    button {
       background: #1f2937;
       color: #9ca3af;
       border: 1px solid #374151;
@@ -165,42 +165,42 @@ html_code = f"""
       align-items: center;
       justify-content: center;
       gap: 4px;
-    }}
+    }
 
-    button:hover {{
+    button:hover {
       background: #374151;
       color: #ffffff;
       border-color: #4b5563;
-    }}
+    }
 
-    button.active {{
+    button.active {
       background: #0284c7 !important;
       border-color: #38bdf8 !important;
       color: #ffffff !important;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
-    }}
+    }
 
-    #btn-delete {{
+    #btn-delete {
       background: rgba(234, 88, 12, 0.2);
       border: 1px solid rgba(234, 88, 12, 0.5);
       color: #fdba74;
-    }}
-    #btn-delete:hover {{
+    }
+    #btn-delete:hover {
       background: #ea580c;
       color: white;
-    }}
+    }
 
-    #btn-clear {{
+    #btn-clear {
       background: rgba(225, 29, 72, 0.15);
       border: 1px solid rgba(225, 29, 72, 0.4);
       color: #fecdd3;
-    }}
-    #btn-clear:hover {{
+    }
+    #btn-clear:hover {
       background: #e11d48;
       color: white;
-    }}
+    }
 
-    #status-bar {{
+    #status-bar {
       position: absolute;
       bottom: 20px;
       left: 20px;
@@ -216,20 +216,20 @@ html_code = f"""
       display: flex;
       align-items: center;
       gap: 8px;
-    }}
+    }
 
-    .status-dot {{
+    .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: #e11d48;
-    }}
-    .status-dot.active {{
+    }
+    .status-dot.active {
       background: #10b981;
       box-shadow: 0 0 8px #10b981;
-    }}
+    }
 
-    #pinch-indicator {{
+    #pinch-indicator {
       position: absolute;
       bottom: 20px;
       right: 20px;
@@ -242,7 +242,7 @@ html_code = f"""
       font-size: 11px;
       font-weight: 600;
       color: #9ca3af;
-    }}
+    }
   </style>
 </head>
 <body>
@@ -355,7 +355,7 @@ html_code = f"""
   let permanentDrawings = [];
   let currentPreviewShape = null;
 
-  let smoothedCursor = {{ x: 640, y: 360 }};
+  let smoothedCursor = { x: 640, y: 360 };
   const alpha = 0.25;
 
   // --- Three.js Scene Setup ---
@@ -363,7 +363,7 @@ html_code = f"""
   const camera = new THREE.PerspectiveCamera(45, 1280 / 720, 1, 2000);
   camera.position.set(0, 0, 600);
 
-  const renderer = new THREE.WebGLRenderer({{ canvas: canvasWebGL, antialias: true, alpha: false }});
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasWebGL, antialias: true, alpha: false });
   renderer.setSize(1280, 720);
   renderer.setPixelRatio(window.devicePixelRatio);
 
@@ -374,7 +374,7 @@ html_code = f"""
   videoTexture.format = THREE.RGBAFormat;
 
   const bgGeo = new THREE.PlaneGeometry(1280, 720);
-  const bgMat = new THREE.MeshBasicMaterial({{ map: videoTexture, depthTest: false, depthWrite: false }});
+  const bgMat = new THREE.MeshBasicMaterial({ map: videoTexture, depthTest: false, depthWrite: false });
   const bgMesh = new THREE.Mesh(bgGeo, bgMat);
   bgMesh.scale.x = -1;
   bgMesh.position.set(0, 0, -500);
@@ -394,44 +394,44 @@ html_code = f"""
 
   // --- 3D Cursor ---
   const cursorGeo = new THREE.SphereGeometry(3, 16, 16);
-  const cursorMat = new THREE.MeshBasicMaterial({{ color: 0x38bdf8 }});
+  const cursorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
   const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
   scene.add(cursorMesh);
 
   const objects3D = [];
   let previewMesh3D = null;
 
-  function attachAutoCADEdges(mesh) {{
+  function attachAutoCADEdges(mesh) {
     const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 25);
-    const edgesMat = new THREE.LineBasicMaterial({{ color: 0x0f172a, linewidth: 1.5 }});
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x0f172a, linewidth: 1.5 });
     const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
     edgeLines.name = "cadEdgeLines";
     mesh.add(edgeLines);
-  }}
+  }
 
-  function setColor(colorHex, el) {{
+  function setColor(colorHex, el) {
     currentColor = colorHex;
     document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('active'));
     if (el) el.classList.add('active');
 
-    if (selectedObject && activeMode === '3D' && selectedObject.material) {{
+    if (selectedObject && activeMode === '3D' && selectedObject.material) {
       selectedObject.material.color.set(currentColor);
-    }}
-  }}
+    }
+  }
 
-  function setHighlight(mesh, isSelected) {{
+  function setHighlight(mesh, isSelected) {
     if (!mesh || !mesh.material) return;
     const edgeLines = mesh.getObjectByName("cadEdgeLines");
-    if (isSelected) {{
+    if (isSelected) {
       mesh.material.emissive.setHex(0x1e293b);
       if (edgeLines) edgeLines.material.color.setHex(0xf59e0b);
-    }} else {{
+    } else {
       mesh.material.emissive.setHex(0x000000);
       if (edgeLines) edgeLines.material.color.setHex(0x0f172a);
-    }}
-  }}
+    }
+  }
 
-  function updateMeasurements(mesh) {{
+  function updateMeasurements(mesh) {
     if (!mesh) return;
     const box = new THREE.Box3().setFromObject(mesh);
     const size = new THREE.Vector3();
@@ -441,42 +441,42 @@ html_code = f"""
     const depth = Math.round(size.z);
     const radius = Math.round(Math.max(size.x, size.z) / 2);
 
-    pinchIndicator.innerText = `L:${{depth}} | H:${{height}} | W:${{width}} | R:${{radius}}px`;
-  }}
+    pinchIndicator.innerText = `L:${depth} | H:${height} | W:${width} | R:${radius}px`;
+  }
 
-  function animateEngine() {{
+  function animateEngine() {
     requestAnimationFrame(animateEngine);
 
-    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {{
+    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
       videoTexture.needsUpdate = true;
-    }}
+    }
 
-    objects3D.forEach(obj => {{
+    objects3D.forEach(obj => {
       obj.visible = (activeMode === '3D');
-      if (activeMode === '3D' && obj !== selectedObject) {{
+      if (activeMode === '3D' && obj !== selectedObject) {
         obj.rotation.y += 0.003;
-      }}
-    }});
+      }
+    });
 
-    if (previewMesh3D) {{
+    if (previewMesh3D) {
       previewMesh3D.visible = (activeMode === '3D');
-      if (activeMode === '3D') {{
+      if (activeMode === '3D') {
         previewMesh3D.rotation.y += 0.015;
-      }}
-    }}
+      }
+    }
 
     cursorMesh.visible = (activeMode === '3D');
 
     renderer.render(scene, camera);
 
-    if (activeMode === '2D') {{
+    if (activeMode === '2D') {
       sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
       
       permanentDrawings.forEach(shape => draw2DShape(sketchCtx, shape));
       
-      if (isPinching && currentPreviewShape) {{
+      if (isPinching && currentPreviewShape) {
         draw2DShape(sketchCtx, currentPreviewShape);
-      }}
+      }
 
       sketchCtx.beginPath();
       sketchCtx.arc(smoothedCursor.x, smoothedCursor.y, 4, 0, Math.PI * 2);
@@ -485,18 +485,18 @@ html_code = f"""
       sketchCtx.lineWidth = 2;
       sketchCtx.strokeStyle = '#ffffff';
       sketchCtx.stroke();
-    }}
-  }}
+    }
+  }
   animateEngine();
 
   // --- Load STL File from Streamlit ---
-  const stlBase64 = "{stl_b64}";
-  if (stlBase64.length > 0) {{
+  const stlBase64 = "__STL_BASE64_PLACEHOLDER__";
+  if (stlBase64.length > 0) {
     const binaryStl = atob(stlBase64);
     const bytes = new Uint8Array(binaryStl.length);
-    for (let i = 0; i < binaryStl.length; i++) {{
+    for (let i = 0; i < binaryStl.length; i++) {
       bytes[i] = binaryStl.charCodeAt(i);
-    }}
+    }
 
     const loader = new THREE.STLLoader();
     const geometry = loader.parse(bytes.buffer);
@@ -509,13 +509,13 @@ html_code = f"""
     const maxDim = Math.max(sizeVec.x, sizeVec.y, sizeVec.z);
     const targetScale = 120 / (maxDim || 1);
 
-    const material = new THREE.MeshStandardMaterial({{
+    const material = new THREE.MeshStandardMaterial({
       color: currentColor,
       roughness: 0.35,
       metalness: 0.25,
       emissive: 0x000000,
       side: THREE.DoubleSide
-    }});
+    });
 
     const stlMesh = new THREE.Mesh(geometry, material);
     stlMesh.scale.set(targetScale, targetScale, targetScale);
@@ -530,9 +530,9 @@ html_code = f"""
     selectedObject = stlMesh;
     setHighlight(selectedObject, true);
     updateMeasurements(selectedObject);
-  }}
+  }
 
-  function switchMode(mode) {{
+  function switchMode(mode) {
     activeMode = mode;
     document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
     document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3D');
@@ -541,100 +541,100 @@ html_code = f"""
     document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
     document.getElementById('group-3d-manipulation').style.display = mode === '3D' ? 'flex' : 'none';
 
-    if (selectedObject) {{
+    if (selectedObject) {
       setHighlight(selectedObject, false);
       selectedObject = null;
-    }}
+    }
 
-    if (mode === '2D') {{
+    if (mode === '2D') {
       sketchCanvas.style.display = 'block';
       setTool('free');
-    }} else {{
+    } else {
       sketchCanvas.style.display = 'none';
       setTool('cube');
-    }}
-  }}
+    }
+  }
 
-  function setTool(tool) {{
+  function setTool(tool) {
     currentTool = tool.toLowerCase();
-    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button').forEach(btn => {{
+    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button').forEach(btn => {
       if (btn.id !== 'btn-delete') btn.classList.remove('active');
-    }});
+    });
 
-    const activeBtn = document.getElementById(`btn-${{currentTool}}`);
-    if (activeBtn) {{
+    const activeBtn = document.getElementById(`btn-${currentTool}`);
+    if (activeBtn) {
       activeBtn.classList.add('active');
-    }}
-  }}
+    }
+  }
 
-  function deleteSelectedObject() {{
-    if (selectedObject && activeMode === '3D') {{
+  function deleteSelectedObject() {
+    if (selectedObject && activeMode === '3D') {
       scene.remove(selectedObject);
       const index = objects3D.indexOf(selectedObject);
-      if (index > -1) {{
+      if (index > -1) {
         objects3D.splice(index, 1);
-      }}
+      }
       if (selectedObject.geometry) selectedObject.geometry.dispose();
       if (selectedObject.material) selectedObject.material.dispose();
       selectedObject = null;
       statusBarText.innerText = "Selected Object Deleted";
       pinchIndicator.innerText = "Pinch Distance: --";
-    }}
-  }}
+    }
+  }
 
-  function clearCanvas() {{
-    if (activeMode === '3D') {{
-      objects3D.forEach(obj => {{
+  function clearCanvas() {
+    if (activeMode === '3D') {
+      objects3D.forEach(obj => {
         scene.remove(obj);
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) obj.material.dispose();
-      }});
+      });
       objects3D.length = 0;
       selectedObject = null;
 
-      if (previewMesh3D) {{
+      if (previewMesh3D) {
         scene.remove(previewMesh3D);
         previewMesh3D = null;
-      }}
+      }
       pinchIndicator.innerText = "Pinch Distance: --";
-    }} else {{
+    } else {
       permanentDrawings = [];
       currentPreviewShape = null;
       sketchCtx.clearRect(0, 0, sketchCanvas.width, sketchCanvas.height);
-    }}
-  }}
+    }
+  }
 
-  function getDistance(p1, p2) {{
+  function getDistance(p1, p2) {
     return Math.hypot(p1.x - p2.x, p1.y - p2.y);
-  }}
+  }
 
-  function mapScreenTo3D(screenX, screenY) {{
+  function mapScreenTo3D(screenX, screenY) {
     const x = (screenX - 640) * 0.55;
     const y = -(screenY - 360) * 0.55;
     return new THREE.Vector3(x, y, 0);
-  }}
+  }
 
-  function autoSelectUnderCursor(screenX, screenY) {{
+  function autoSelectUnderCursor(screenX, screenY) {
     mouse2D.x = (screenX / 1280) * 2 - 1;
     mouse2D.y = -(screenY / 720) * 2 + 1;
 
     raycaster.setFromCamera(mouse2D, camera);
     const intersects = raycaster.intersectObjects(objects3D);
 
-    if (intersects.length > 0) {{
+    if (intersects.length > 0) {
       if (selectedObject) setHighlight(selectedObject, false);
       selectedObject = intersects[0].object;
       setHighlight(selectedObject, true);
       statusBarText.innerText = "Object Selected!";
       
-      if (currentTool === 'measure') {{
+      if (currentTool === 'measure') {
         updateMeasurements(selectedObject);
-      }}
-    }}
-  }}
+      }
+    }
+  }
 
   // --- 2D Drawing Utilities ---
-  function draw2DShape(ctx, shape) {{
+  function draw2DShape(ctx, shape) {
     const strokeColor = shape.color || '#38bdf8';
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = strokeColor + '40';
@@ -642,22 +642,22 @@ html_code = f"""
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    if (shape.tool === 'free' && shape.points) {{
+    if (shape.tool === 'free' && shape.points) {
       if (shape.points.length < 2) return;
       ctx.beginPath();
       ctx.moveTo(shape.points[0].x, shape.points[0].y);
-      for (let i = 1; i < shape.points.length; i++) {{
+      for (let i = 1; i < shape.points.length; i++) {
         ctx.lineTo(shape.points[i].x, shape.points[i].y);
-      }}
+      }
       ctx.stroke();
-    }} else if (shape.tool === 'rectangle') {{
+    } else if (shape.tool === 'rectangle') {
       const w = shape.end.x - shape.start.x;
       const h = shape.end.y - shape.start.y;
       ctx.beginPath();
       ctx.rect(shape.start.x, shape.start.y, w, h);
       ctx.fill();
       ctx.stroke();
-    }} else if (shape.tool === 'circle') {{
+    } else if (shape.tool === 'circle') {
       const radius = getDistance(shape.start, shape.end) / 2;
       const cx = (shape.start.x + shape.end.x) / 2;
       const cy = (shape.start.y + shape.end.y) / 2;
@@ -665,7 +665,7 @@ html_code = f"""
       ctx.arc(cx, cy, Math.max(radius, 5), 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    }} else if (shape.tool === 'triangle') {{
+    } else if (shape.tool === 'triangle') {
       const x1 = (shape.start.x + shape.end.x) / 2;
       const y1 = shape.start.y;
       const x2 = shape.start.x;
@@ -680,116 +680,116 @@ html_code = f"""
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    }}
-  }}
+    }
+  }
 
   // --- 3D Shape Creation (Including Cylinder & Pyramid) ---
-  function create3DShape(type, size, pos) {{
+  function create3DShape(type, size, pos) {
     let geometry;
     const s = Math.max(size * 0.5, 25);
 
-    if (type === 'sphere') {{
+    if (type === 'sphere') {
       geometry = new THREE.SphereGeometry(s / 1.5, 32, 32);
-    }} else if (type === 'cube') {{
+    } else if (type === 'cube') {
       geometry = new THREE.BoxGeometry(s, s, s);
-    }} else if (type === 'cone') {{
+    } else if (type === 'cone') {
       geometry = new THREE.ConeGeometry(s / 1.5, s * 1.5, 32);
-    }} else if (type === 'cylinder') {{
+    } else if (type === 'cylinder') {
       geometry = new THREE.CylinderGeometry(s / 1.5, s / 1.5, s * 1.5, 32);
-    }} else if (type === 'pyramid') {{
+    } else if (type === 'pyramid') {
       geometry = new THREE.ConeGeometry(s / 1.5, s * 1.5, 4);
-    }} else {{
+    } else {
       geometry = new THREE.BoxGeometry(s, s, s);
-    }}
+    }
 
-    const material = new THREE.MeshStandardMaterial({{
+    const material = new THREE.MeshStandardMaterial({
       color: currentColor,
       roughness: 0.35,
       metalness: 0.25,
       emissive: 0x000000,
       side: THREE.DoubleSide
-    }});
+    });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(pos);
     attachAutoCADEdges(mesh);
     return mesh;
-  }}
+  }
 
-  function handleTransform(currPos, prevPos) {{
+  function handleTransform(currPos, prevPos) {
     if (!selectedObject) return;
 
     const dx = currPos.x - prevPos.x;
     const dy = currPos.y - prevPos.y;
 
-    if (currentTool === 'move') {{
+    if (currentTool === 'move') {
       const pos3D = mapScreenTo3D(currPos.x, currPos.y);
       selectedObject.position.x = pos3D.x;
       selectedObject.position.y = pos3D.y;
-    }} else if (currentTool === 'resize') {{
+    } else if (currentTool === 'resize') {
       const scaleDelta = (dx - dy) * 0.01;
       const currentScale = selectedObject.scale.x;
       const newScale = Math.max(0.1, currentScale + scaleDelta);
       selectedObject.scale.set(newScale, newScale, newScale);
       updateMeasurements(selectedObject);
-    }} else if (currentTool === 'extrude') {{
+    } else if (currentTool === 'extrude') {
       const scaleDeltaZ = dy * 0.02;
       const currentScaleZ = selectedObject.scale.z;
       const newScaleZ = Math.max(0.1, currentScaleZ + scaleDeltaZ);
       selectedObject.scale.set(selectedObject.scale.x, selectedObject.scale.y, newScaleZ);
       updateMeasurements(selectedObject);
-    }} else if (currentTool === 'rotx') {{
+    } else if (currentTool === 'rotx') {
       selectedObject.rotation.x += dy * 0.02;
-    }} else if (currentTool === 'roty') {{
+    } else if (currentTool === 'roty') {
       selectedObject.rotation.y += dx * 0.02;
-    }} else if (currentTool === 'rotz') {{
+    } else if (currentTool === 'rotz') {
       selectedObject.rotation.z += dx * 0.02;
-    }}
-  }}
+    }
+  }
 
-  function updatePreview(start, end) {{
-    if (activeMode === '3D') {{
-      if (['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz', 'measure'].includes(currentTool)) {{
+  function updatePreview(start, end) {
+    if (activeMode === '3D') {
+      if (['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz', 'measure'].includes(currentTool)) {
         return;
-      }}
+      }
       const size = Math.max(getDistance(start, end), 25);
       const pos = mapScreenTo3D((start.x + end.x) / 2, (start.y + end.y) / 2);
 
-      if (previewMesh3D) {{
+      if (previewMesh3D) {
         scene.remove(previewMesh3D);
-      }}
+      }
       previewMesh3D = create3DShape(currentTool, size, pos);
       scene.add(previewMesh3D);
-    }} else {{
-      if (currentTool === 'free') {{
+    } else {
+      if (currentTool === 'free') {
         if (!currentPreviewShape.points) currentPreviewShape.points = [];
-        currentPreviewShape.points.push({{ x: end.x, y: end.y }});
-      }} else {{
-        currentPreviewShape.end = {{ x: end.x, y: end.y }};
-      }}
-    }}
-  }}
+        currentPreviewShape.points.push({ x: end.x, y: end.y });
+      } else {
+        currentPreviewShape.end = { x: end.x, y: end.y };
+      }
+    }
+  }
 
-  function finalizeShape() {{
-    if (activeMode === '3D') {{
-      if (previewMesh3D) {{
+  function finalizeShape() {
+    if (activeMode === '3D') {
+      if (previewMesh3D) {
         objects3D.push(previewMesh3D);
         if (selectedObject) setHighlight(selectedObject, false);
         selectedObject = previewMesh3D;
         setHighlight(selectedObject, true);
         previewMesh3D = null;
         updateMeasurements(selectedObject);
-      }}
-    }} else {{
-      if (currentPreviewShape) {{
+      }
+    } else {
+      if (currentPreviewShape) {
         permanentDrawings.push(currentPreviewShape);
         currentPreviewShape = null;
-      }}
-    }}
-  }}
+      }
+    }
+  }
 
-  function onResults(results) {{
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
+  function onResults(results) {
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       statusDot.classList.add('active');
       const landmarks = results.multiHandLandmarks[0];
 
@@ -804,78 +804,78 @@ html_code = f"""
       smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
       smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
-      if (activeMode === '3D') {{
+      if (activeMode === '3D') {
         const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
         cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
-      }}
+      }
 
       const pinchDist = getDistance(
-        {{ x: rawCursorX, y: rawCursorY }},
-        {{ x: rawThumbX, y: rawThumbY }}
+        { x: rawCursorX, y: rawCursorY },
+        { x: rawThumbX, y: rawThumbY }
       );
 
-      if (currentTool !== 'measure') {{
-        pinchIndicator.innerText = `Pinch Distance: ${{Math.round(pinchDist)}}px`;
-      }}
+      if (currentTool !== 'measure') {
+        pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
+      }
       
       const currentlyPinching = pinchDist < 45;
 
-      if (activeMode === '3D') {{
+      if (activeMode === '3D') {
         cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
-      }}
+      }
 
-      if (currentlyPinching) {{
-        if (!isPinching) {{
+      if (currentlyPinching) {
+        if (!isPinching) {
           isPinching = true;
-          startPinchPoint = {{ x: smoothedCursor.x, y: smoothedCursor.y }};
-          lastPinchPoint = {{ x: smoothedCursor.x, y: smoothedCursor.y }};
+          startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
           
-          if (activeMode === '3D') {{
+          if (activeMode === '3D') {
             autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y);
-          }} else {{
-            currentPreviewShape = {{
+          } else {
+            currentPreviewShape = {
               tool: currentTool,
               color: currentColor,
-              start: {{ x: smoothedCursor.x, y: smoothedCursor.y }},
-              end: {{ x: smoothedCursor.x, y: smoothedCursor.y }},
-              points: currentTool === 'free' ? [{{ x: smoothedCursor.x, y: smoothedCursor.y }}] : null
-            }};
-          }}
+              start: { x: smoothedCursor.x, y: smoothedCursor.y },
+              end: { x: smoothedCursor.x, y: smoothedCursor.y },
+              points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null
+            };
+          }
 
-          statusBarText.innerText = `Active [${{activeMode}} - ${{currentTool.toUpperCase()}}]`;
-          updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
-        }} else {{
-          if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
+          statusBarText.innerText = `Active [${activeMode} - ${currentTool.toUpperCase()}]`;
+          updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
+        } else {
+          if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) {
             handleTransform(smoothedCursor, lastPinchPoint);
-          }} else {{
-            updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
-          }}
-          lastPinchPoint = {{ x: smoothedCursor.x, y: smoothedCursor.y }};
-        }}
-      }} else {{
-        if (isPinching) {{
+          } else {
+            updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
+          }
+          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+        }
+      } else {
+        if (isPinching) {
           isPinching = false;
-          statusBarText.innerText = `Tracking Active (${{activeMode}})`;
+          statusBarText.innerText = `Tracking Active (${activeMode})`;
           finalizeShape();
-        }}
-      }}
-    }} else {{
+        }
+      }
+    } else {
       statusDot.classList.remove('active');
       statusBarText.innerText = "Searching for hand...";
-      if (currentTool !== 'measure') {{
+      if (currentTool !== 'measure') {
         pinchIndicator.innerText = "Pinch Distance: --";
-      }}
-      if (activeMode === '3D') {{
+      }
+      if (activeMode === '3D') {
         cursorMesh.position.set(2000, 2000, 0);
-      }}
-    }}
-  }}
+      }
+    }
+  }
 
-  const hands = new Hands({{
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${{file}}`
-  }});
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
 
-  hands.setOptions({{
+  hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
     minDetectionConfidence: 0.65,
@@ -884,24 +884,25 @@ html_code = f"""
 
   hands.onResults(onResults);
 
-  const cameraMedia = new Camera(videoElement, {{
-    onFrame: async () => {{
-      await hands.send({{ image: videoElement }});
-    }},
+  const cameraMedia = new Camera(videoElement, {
+    onFrame: async () => {
+      await hands.send({ image: videoElement });
+    },
     width: 1280,
     height: 720
-  }});
+  });
 
-  cameraMedia.start().then(() => {{
+  cameraMedia.start().then(() => {
     statusBarText.innerText = "Tracking Active (3D)";
-  }}).catch((err) => {{
+  }).catch((err) => {
     statusBarText.innerText = "Camera Access Denied/Failed";
     console.error(err);
-  }});
+  });
 </script>
 
 </body>
 </html>
 """
 
+html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
 components.html(html_code, height=740, width=1300)
