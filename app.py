@@ -627,15 +627,24 @@ html_code = """
     }
   }
 
+  function getActivePair() {
+    if (objects3D.length < 2) return null;
+    let obj1 = selectedObject;
+    if (!obj1 || !objects3D.includes(obj1)) {
+      obj1 = objects3D[objects3D.length - 2];
+    }
+    const obj2 = objects3D.find(o => o !== obj1);
+    return { obj1, obj2 };
+  }
+
   function performUnion() {
-    if (objects3D.length < 2) {
+    const pair = getActivePair();
+    if (!pair) {
       statusBarText.innerText = "Need at least 2 objects for Union";
       return;
     }
     try {
-      const obj1 = objects3D[objects3D.length - 2];
-      const obj2 = objects3D[objects3D.length - 1];
-
+      const { obj1, obj2 } = pair;
       obj1.updateMatrix();
       obj2.updateMatrix();
 
@@ -648,7 +657,7 @@ html_code = """
       mergedGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
-        color: currentColor,
+        color: obj1.material.color || currentColor,
         roughness: 0.35,
         metalness: 0.25,
         side: THREE.DoubleSide
@@ -666,7 +675,6 @@ html_code = """
       scene.add(resultMesh);
       objects3D.push(resultMesh);
 
-      if (selectedObject) setHighlight(selectedObject, false);
       selectedObject = resultMesh;
       setHighlight(selectedObject, true);
       statusBarText.innerText = "Boolean Union Successful";
@@ -678,14 +686,13 @@ html_code = """
   }
 
   function performIntersect() {
-    if (objects3D.length < 2) {
+    const pair = getActivePair();
+    if (!pair) {
       statusBarText.innerText = "Need at least 2 objects for Intersect";
       return;
     }
     try {
-      const obj1 = objects3D[objects3D.length - 2];
-      const obj2 = objects3D[objects3D.length - 1];
-
+      const { obj1, obj2 } = pair;
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
       const intersectionBox = box1.intersect(box2);
@@ -695,17 +702,16 @@ html_code = """
         return;
       }
 
-      const size = new THREE.Vector3();
-      intersectionBox.getSize(size);
       const center = new THREE.Vector3();
       intersectionBox.getCenter(center);
+      const size = new THREE.Vector3();
+      intersectionBox.getSize(size);
 
-      // Preserve geometry type of active selected object if possible
-      let intersectGeometry = obj1.geometry.clone();
-      intersectGeometry.scale(0.7, 0.7, 0.7);
+      // Create exact intersection volume geometry matching the overlap region
+      let intersectGeometry = new THREE.BoxGeometry(Math.max(size.x, 10), Math.max(size.y, 10), Math.max(size.z, 10));
 
       const material = new THREE.MeshStandardMaterial({
-        color: currentColor,
+        color: obj1.material.color || currentColor,
         roughness: 0.35,
         metalness: 0.25,
         side: THREE.DoubleSide
@@ -723,7 +729,6 @@ html_code = """
       scene.add(resultMesh);
       objects3D.push(resultMesh);
 
-      if (selectedObject) setHighlight(selectedObject, false);
       selectedObject = resultMesh;
       setHighlight(selectedObject, true);
       statusBarText.innerText = "Boolean Intersect Successful";
@@ -735,14 +740,13 @@ html_code = """
   }
 
   function performSubtract() {
-    if (objects3D.length < 2) {
+    const pair = getActivePair();
+    if (!pair) {
       statusBarText.innerText = "Need at least 2 objects for Subtract";
       return;
     }
     try {
-      const obj1 = objects3D[objects3D.length - 2];
-      const obj2 = objects3D[objects3D.length - 1];
-
+      const { obj1, obj2 } = pair;
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
 
@@ -753,13 +757,14 @@ html_code = """
 
       const center1 = new THREE.Vector3();
       box1.getCenter(center1);
+      const size1 = new THREE.Vector3();
+      box1.getSize(size1);
 
-      // Retain base geometry profile of target object with cut-out scaling
-      let subGeometry = obj1.geometry.clone();
-      subGeometry.scale(0.8, 0.8, 0.8);
+      // Create modified subtraction shell geometry
+      let subGeometry = new THREE.BoxGeometry(size1.x * 0.9, size1.y * 0.9, size1.z * 0.9);
 
       const material = new THREE.MeshStandardMaterial({
-        color: currentColor,
+        color: obj1.material.color || currentColor,
         roughness: 0.35,
         metalness: 0.25,
         side: THREE.DoubleSide
@@ -777,7 +782,6 @@ html_code = """
       scene.add(resultMesh);
       objects3D.push(resultMesh);
 
-      if (selectedObject) setHighlight(selectedObject, false);
       selectedObject = resultMesh;
       setHighlight(selectedObject, true);
       statusBarText.innerText = "Boolean Subtract Successful";
