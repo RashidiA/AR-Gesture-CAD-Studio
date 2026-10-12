@@ -314,7 +314,7 @@ html_code = """
       <button id="btn-delete" onclick="deleteSelectedObject()">Delete Selected</button>
     </div>
 
-    <!-- Object Modification Section (Extrude Face, Union, Intersect, Subtract) -->
+    <!-- Object Modification Section -->
     <div class="ui-group" id="group-3d-modification">
       <span class="ui-label">Object Modification & Booleans</span>
       <button id="btn-extrude" onclick="setTool('extrude')">Extrude Face</button>
@@ -700,7 +700,10 @@ html_code = """
       const center = new THREE.Vector3();
       intersectionBox.getCenter(center);
 
-      const intersectGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+      // Preserve geometry type of active selected object if possible
+      let intersectGeometry = obj1.geometry.clone();
+      intersectGeometry.scale(0.7, 0.7, 0.7);
+
       const material = new THREE.MeshStandardMaterial({
         color: currentColor,
         roughness: 0.35,
@@ -740,7 +743,6 @@ html_code = """
       const obj1 = objects3D[objects3D.length - 2];
       const obj2 = objects3D[objects3D.length - 1];
 
-      // Subtract obj2 volume from obj1
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
 
@@ -749,13 +751,13 @@ html_code = """
         return;
       }
 
-      const size1 = new THREE.Vector3();
-      box1.getSize(size1);
       const center1 = new THREE.Vector3();
       box1.getCenter(center1);
 
-      // Scale down base geometry to simulate subtraction pocket
-      const subGeometry = new THREE.BoxGeometry(size1.x * 0.85, size1.y * 0.85, size1.z * 0.85);
+      // Retain base geometry profile of target object with cut-out scaling
+      let subGeometry = obj1.geometry.clone();
+      subGeometry.scale(0.8, 0.8, 0.8);
+
       const material = new THREE.MeshStandardMaterial({
         color: currentColor,
         roughness: 0.35,
