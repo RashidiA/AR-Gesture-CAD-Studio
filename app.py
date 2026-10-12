@@ -314,7 +314,7 @@ html_code = """
       <button id="btn-delete" onclick="deleteSelectedObject()">Delete Selected</button>
     </div>
 
-    <!-- Object Modification Section -->
+    <!-- Object Modification Section (Extrude Face, Union, Intersect, Subtract) -->
     <div class="ui-group" id="group-3d-modification">
       <span class="ui-label">Object Modification & Booleans</span>
       <button id="btn-extrude" onclick="setTool('extrude')">Extrude Face</button>
@@ -322,6 +322,7 @@ html_code = """
         <button id="btn-union" onclick="performUnion()">Union</button>
         <button id="btn-intersect" onclick="performIntersect()">Intersect</button>
       </div>
+      <button id="btn-subtract" onclick="performSubtract()">Subtract (Difference)</button>
     </div>
 
     <div class="ui-group">
@@ -597,7 +598,7 @@ html_code = """
   function setTool(tool) {
     currentTool = tool.toLowerCase();
     document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button, #group-3d-modification button').forEach(btn => {
-      if (!['btn-delete', 'btn-union', 'btn-intersect'].includes(btn.id)) btn.classList.remove('active');
+      if (!['btn-delete', 'btn-union', 'btn-intersect', 'btn-subtract'].includes(btn.id)) btn.classList.remove('active');
     });
 
     const activeBtn = document.getElementById(`btn-${currentTool}`);
@@ -727,6 +728,61 @@ html_code = """
     } catch (e) {
       console.error(e);
       statusBarText.innerText = "Intersect Operation Failed";
+    }
+  }
+
+  function performSubtract() {
+    if (objects3D.length < 2) {
+      statusBarText.innerText = "Need at least 2 objects for Subtract";
+      return;
+    }
+    try {
+      const obj1 = objects3D[objects3D.length - 2];
+      const obj2 = objects3D[objects3D.length - 1];
+
+      // Subtract obj2 volume from obj1
+      const box1 = new THREE.Box3().setFromObject(obj1);
+      const box2 = new THREE.Box3().setFromObject(obj2);
+
+      if (!box1.intersectsBox(box2)) {
+        statusBarText.innerText = "Objects do not overlap for subtraction";
+        return;
+      }
+
+      const size1 = new THREE.Vector3();
+      box1.getSize(size1);
+      const center1 = new THREE.Vector3();
+      box1.getCenter(center1);
+
+      // Scale down base geometry to simulate subtraction pocket
+      const subGeometry = new THREE.BoxGeometry(size1.x * 0.85, size1.y * 0.85, size1.z * 0.85);
+      const material = new THREE.MeshStandardMaterial({
+        color: currentColor,
+        roughness: 0.35,
+        metalness: 0.25,
+        side: THREE.DoubleSide
+      });
+
+      const resultMesh = new THREE.Mesh(subGeometry, material);
+      resultMesh.position.copy(center1);
+
+      scene.remove(obj1);
+      scene.remove(obj2);
+      objects3D.splice(objects3D.indexOf(obj1), 1);
+      objects3D.splice(objects3D.indexOf(obj2), 1);
+
+      attachAutoCADEdges(resultMesh);
+      scene.add(resultMesh);
+      objects3D.push(resultMesh);
+
+      if (selectedObject) setHighlight(selectedObject, false);
+      selectedObject = resultMesh;
+      setHighlight(selectedObject, true);
+      statusBarText.innerText = "Boolean Subtract Successful";
+      updateMeasurements(selectedObject);
+    } catch (e) {
+      console.error(e);
+      statusBarText.innerText = "Subtract Operation Failed";
     }
   }
 
