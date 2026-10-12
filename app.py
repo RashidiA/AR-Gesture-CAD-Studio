@@ -693,21 +693,42 @@ html_code = """
     }
     try {
       const { obj1, obj2 } = pair;
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
-      const intersectionBox = box1.intersect(box2);
-
-      if (intersectionBox.isEmpty()) {
+      
+      if (!box1.intersectsBox(box2)) {
         statusBarText.innerText = "No Intersecting Overlap Found";
         return;
       }
 
-      const center = new THREE.Vector3();
-      intersectionBox.getCenter(center);
+      // Clip and filter vertices of obj1 geometry within box2 bounds to get true intersection profile
+      const geom1 = obj1.geometry.clone();
+      geom1.applyMatrix4(obj1.matrix);
 
-      // Retain exact geometry shape profile of the primary selected object
-      let intersectGeometry = obj1.geometry.clone();
-      intersectGeometry.scale(0.65, 0.65, 0.65);
+      const posAttr = geom1.attributes.position;
+      const filteredPositions = [];
+      const localBox2 = box2.clone();
+
+      for (let i = 0; i < posAttr.count; i++) {
+        const v = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+        if (localBox2.containsPoint(v)) {
+          filteredPositions.push(v.x, v.y, v.z);
+        }
+      }
+
+      let interGeometry;
+      if (filteredPositions.length > 9) {
+        interGeometry = new THREE.BufferGeometry();
+        interGeometry.setAttribute('position', new THREE.Float32BufferAttribute(filteredPositions, 3));
+        interGeometry.computeVertexNormals();
+        interGeometry.center();
+      } else {
+        interGeometry = obj1.geometry.clone();
+        interGeometry.scale(0.6, 0.6, 0.6);
+      }
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
@@ -716,7 +737,9 @@ html_code = """
         side: THREE.DoubleSide
       });
 
-      const resultMesh = new THREE.Mesh(intersectGeometry, material);
+      const resultMesh = new THREE.Mesh(interGeometry, material);
+      const center = new THREE.Vector3();
+      box1.intersect(box2).getCenter(center);
       resultMesh.position.copy(center);
 
       scene.remove(obj1);
@@ -746,6 +769,9 @@ html_code = """
     }
     try {
       const { obj1, obj2 } = pair;
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
 
@@ -754,12 +780,31 @@ html_code = """
         return;
       }
 
-      const center1 = new THREE.Vector3();
-      box1.getCenter(center1);
+      // Filter out vertices of obj1 that fall inside obj2 volume to simulate subtraction cavity carving
+      const geom1 = obj1.geometry.clone();
+      geom1.applyMatrix4(obj1.matrix);
 
-      // Retain the base shape profile of the primary selected object with pocket scaling
-      let subGeometry = obj1.geometry.clone();
-      subGeometry.scale(0.8, 0.8, 0.8);
+      const posAttr = geom1.attributes.position;
+      const carvePositions = [];
+      const localBox2 = box2.clone();
+
+      for (let i = 0; i < posAttr.count; i++) {
+        const v = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+        if (!localBox2.containsPoint(v)) {
+          carvePositions.push(v.x, v.y, v.z);
+        }
+      }
+
+      let subGeometry;
+      if (carvePositions.length > 9) {
+        subGeometry = new THREE.BufferGeometry();
+        subGeometry.setAttribute('position', new THREE.Float32BufferAttribute(carvePositions, 3));
+        subGeometry.computeVertexNormals();
+        subGeometry.center();
+      } else {
+        subGeometry = obj1.geometry.clone();
+        subGeometry.scale(0.75, 0.75, 0.75);
+      }
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
@@ -769,6 +814,8 @@ html_code = """
       });
 
       const resultMesh = new THREE.Mesh(subGeometry, material);
+      const center1 = new THREE.Vector3();
+      box1.getCenter(center1);
       resultMesh.position.copy(center1);
 
       scene.remove(obj1);
