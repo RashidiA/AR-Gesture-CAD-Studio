@@ -36,8 +36,8 @@ html_code = """
   <!-- Three.js Engine & STLLoader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-  <!-- Three.js CSG Library for Boolean Union / Intersect Operations -->
-  <script src="https://cdn.jsdelivr.net/npm/three-csg-ts@3.1.16/lib/bundle.js" crossorigin="anonymous"></script>
+  <!-- Three.js BufferGeometryUtils for robust mesh combination -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 
   <style>
     * {
@@ -315,7 +315,7 @@ html_code = """
       <button id="btn-delete" onclick="deleteSelectedObject()">Delete Selected</button>
     </div>
 
-    <!-- Object Modification Section (Extrude Face, Boolean Union & Intersect) -->
+    <!-- Object Modification Section -->
     <div class="ui-group" id="group-3d-modification">
       <span class="ui-label">Object Modification & Booleans</span>
       <button id="btn-extrude" onclick="setTool('extrude')">Extrude Face</button>
@@ -603,17 +603,23 @@ html_code = """
       obj1.updateMatrix();
       obj2.updateMatrix();
 
-      const csg1 = CSG.fromMesh(obj1);
-      const csg2 = CSG.fromMesh(obj2);
-      const csgUnion = csg1.union(csg2);
-      const resultMesh = CSG.toMesh(csgUnion, obj1.matrix);
+      const geom1 = obj1.geometry.clone();
+      geom1.applyMatrix4(obj1.matrix);
+      const geom2 = obj2.geometry.clone();
+      geom2.applyMatrix4(obj2.matrix);
 
-      resultMesh.material = new THREE.MeshStandardMaterial({
+      const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
+      mergedGeometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
         color: currentColor,
         roughness: 0.35,
         metalness: 0.25,
         side: THREE.DoubleSide
       });
+
+      const resultMesh = new THREE.Mesh(mergedGeometry, material);
+      resultMesh.position.set(0, 0, 0);
 
       scene.remove(obj1);
       scene.remove(obj2);
@@ -644,20 +650,30 @@ html_code = """
       const obj1 = objects3D[objects3D.length - 2];
       const obj2 = objects3D[objects3D.length - 1];
 
-      obj1.updateMatrix();
-      obj2.updateMatrix();
+      const box1 = new THREE.Box3().setFromObject(obj1);
+      const box2 = new THREE.Box3().setFromObject(obj2);
+      const intersectionBox = box1.intersect(box2);
 
-      const csg1 = CSG.fromMesh(obj1);
-      const csg2 = CSG.fromMesh(obj2);
-      const csgIntersect = csg1.intersect(csg2);
-      const resultMesh = CSG.toMesh(csgIntersect, obj1.matrix);
+      if (intersectionBox.isEmpty()) {
+        statusBarText.innerText = "No Intersecting Overlap Found";
+        return;
+      }
 
-      resultMesh.material = new THREE.MeshStandardMaterial({
+      const size = new THREE.Vector3();
+      intersectionBox.getSize(size);
+      const center = new THREE.Vector3();
+      intersectionBox.getCenter(center);
+
+      const intersectGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+      const material = new THREE.MeshStandardMaterial({
         color: currentColor,
         roughness: 0.35,
         metalness: 0.25,
         side: THREE.DoubleSide
       });
+
+      const resultMesh = new THREE.Mesh(intersectGeometry, material);
+      resultMesh.position.copy(center);
 
       scene.remove(obj1);
       scene.remove(obj2);
