@@ -97,7 +97,7 @@ html_code = f"""
       display: flex;
       flex-direction: column;
       gap: 12px;
-      width: 250px;
+      width: 260px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
     }}
@@ -286,21 +286,28 @@ html_code = f"""
       </div>
     </div>
 
+    <!-- 3D Primitives with Cylinder & Pyramid -->
     <div class="ui-group" id="group-3d-tools">
       <span class="ui-label">3D Primitives & Create</span>
       <div class="btn-grid">
         <button id="btn-sphere" onclick="setTool('sphere')">Sphere</button>
         <button id="btn-cube" class="active" onclick="setTool('cube')">Cube</button>
         <button id="btn-cone" onclick="setTool('cone')">Cone</button>
-        <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
+        <button id="btn-cylinder" onclick="setTool('cylinder')">Cylinder</button>
       </div>
+      <button id="btn-pyramid" onclick="setTool('pyramid')">Pyramid</button>
     </div>
 
+    <!-- Object Transform with Extrude Z and Measure -->
     <div class="ui-group" id="group-3d-manipulation">
-      <span class="ui-label">Object Transform</span>
+      <span class="ui-label">Object Transform & Measure</span>
       <div class="btn-grid">
         <button id="btn-move" onclick="setTool('move')">Move</button>
         <button id="btn-resize" onclick="setTool('resize')">Resize</button>
+      </div>
+      <div class="btn-grid">
+        <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
+        <button id="btn-measure" onclick="setTool('measure')">Measure</button>
       </div>
       <div class="btn-grid-3">
         <button id="btn-rotx" onclick="setTool('rotx')">Rot X</button>
@@ -395,7 +402,6 @@ html_code = f"""
   let previewMesh3D = null;
 
   function attachAutoCADEdges(mesh) {{
-    // Create sharp technical CAD outline edges (AutoCAD / SolidWorks Style)
     const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 25);
     const edgesMat = new THREE.LineBasicMaterial({{ color: 0x0f172a, linewidth: 1.5 }});
     const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
@@ -418,11 +424,24 @@ html_code = f"""
     const edgeLines = mesh.getObjectByName("cadEdgeLines");
     if (isSelected) {{
       mesh.material.emissive.setHex(0x1e293b);
-      if (edgeLines) edgeLines.material.color.setHex(0xf59e0b); // Gold CAD outline selection
+      if (edgeLines) edgeLines.material.color.setHex(0xf59e0b);
     }} else {{
       mesh.material.emissive.setHex(0x000000);
-      if (edgeLines) edgeLines.material.color.setHex(0x0f172a); // Technical dark CAD edge
+      if (edgeLines) edgeLines.material.color.setHex(0x0f172a);
     }}
+  }}
+
+  function updateMeasurements(mesh) {{
+    if (!mesh) return;
+    const box = new THREE.Box3().setFromObject(mesh);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const width = Math.round(size.x);
+    const height = Math.round(size.y);
+    const depth = Math.round(size.z);
+    const radius = Math.round(Math.max(size.x, size.z) / 2);
+
+    pinchIndicator.innerText = `L:${{depth}} | H:${{height}} | W:${{width}} | R:${{radius}}px`;
   }}
 
   function animateEngine() {{
@@ -470,7 +489,7 @@ html_code = f"""
   }}
   animateEngine();
 
-  // --- Load STL File from Streamlit with AutoCAD CAD Shader Pipeline ---
+  // --- Load STL File from Streamlit ---
   const stlBase64 = "{stl_b64}";
   if (stlBase64.length > 0) {{
     const binaryStl = atob(stlBase64);
@@ -490,7 +509,6 @@ html_code = f"""
     const maxDim = Math.max(sizeVec.x, sizeVec.y, sizeVec.z);
     const targetScale = 120 / (maxDim || 1);
 
-    // Realistic CAD Material (MeshStandardMaterial with defined roughness and metalness)
     const material = new THREE.MeshStandardMaterial({{
       color: currentColor,
       roughness: 0.35,
@@ -511,6 +529,7 @@ html_code = f"""
     if (selectedObject) setHighlight(selectedObject, false);
     selectedObject = stlMesh;
     setHighlight(selectedObject, true);
+    updateMeasurements(selectedObject);
   }}
 
   function switchMode(mode) {{
@@ -559,6 +578,7 @@ html_code = f"""
       if (selectedObject.material) selectedObject.material.dispose();
       selectedObject = null;
       statusBarText.innerText = "Selected Object Deleted";
+      pinchIndicator.innerText = "Pinch Distance: --";
     }}
   }}
 
@@ -576,6 +596,7 @@ html_code = f"""
         scene.remove(previewMesh3D);
         previewMesh3D = null;
       }}
+      pinchIndicator.innerText = "Pinch Distance: --";
     }} else {{
       permanentDrawings = [];
       currentPreviewShape = null;
@@ -605,6 +626,10 @@ html_code = f"""
       selectedObject = intersects[0].object;
       setHighlight(selectedObject, true);
       statusBarText.innerText = "Object Selected!";
+      
+      if (currentTool === 'measure') {{
+        updateMeasurements(selectedObject);
+      }}
     }}
   }}
 
@@ -658,7 +683,7 @@ html_code = f"""
     }}
   }}
 
-  // --- 3D Shape Creation ---
+  // --- 3D Shape Creation (Including Cylinder & Pyramid) ---
   function create3DShape(type, size, pos) {{
     let geometry;
     const s = Math.max(size * 0.5, 25);
@@ -669,8 +694,12 @@ html_code = f"""
       geometry = new THREE.BoxGeometry(s, s, s);
     }} else if (type === 'cone') {{
       geometry = new THREE.ConeGeometry(s / 1.5, s * 1.5, 32);
+    }} else if (type === 'cylinder') {{
+      geometry = new THREE.CylinderGeometry(s / 1.5, s / 1.5, s * 1.5, 32);
+    }} else if (type === 'pyramid') {{
+      geometry = new THREE.ConeGeometry(s / 1.5, s * 1.5, 4);
     }} else {{
-      geometry = new THREE.CylinderGeometry(s / 1.5, s / 1.5, s, 32);
+      geometry = new THREE.BoxGeometry(s, s, s);
     }}
 
     const material = new THREE.MeshStandardMaterial({{
@@ -702,6 +731,13 @@ html_code = f"""
       const currentScale = selectedObject.scale.x;
       const newScale = Math.max(0.1, currentScale + scaleDelta);
       selectedObject.scale.set(newScale, newScale, newScale);
+      updateMeasurements(selectedObject);
+    }} else if (currentTool === 'extrude') {{
+      const scaleDeltaZ = dy * 0.02;
+      const currentScaleZ = selectedObject.scale.z;
+      const newScaleZ = Math.max(0.1, currentScaleZ + scaleDeltaZ);
+      selectedObject.scale.set(selectedObject.scale.x, selectedObject.scale.y, newScaleZ);
+      updateMeasurements(selectedObject);
     }} else if (currentTool === 'rotx') {{
       selectedObject.rotation.x += dy * 0.02;
     }} else if (currentTool === 'roty') {{
@@ -713,7 +749,7 @@ html_code = f"""
 
   function updatePreview(start, end) {{
     if (activeMode === '3D') {{
-      if (['move', 'resize', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
+      if (['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz', 'measure'].includes(currentTool)) {{
         return;
       }}
       const size = Math.max(getDistance(start, end), 25);
@@ -742,6 +778,7 @@ html_code = f"""
         selectedObject = previewMesh3D;
         setHighlight(selectedObject, true);
         previewMesh3D = null;
+        updateMeasurements(selectedObject);
       }}
     }} else {{
       if (currentPreviewShape) {{
@@ -777,7 +814,9 @@ html_code = f"""
         {{ x: rawThumbX, y: rawThumbY }}
       );
 
-      pinchIndicator.innerText = `Pinch Distance: ${{Math.round(pinchDist)}}px`;
+      if (currentTool !== 'measure') {{
+        pinchIndicator.innerText = `Pinch Distance: ${{Math.round(pinchDist)}}px`;
+      }}
       
       const currentlyPinching = pinchDist < 45;
 
@@ -806,7 +845,7 @@ html_code = f"""
           statusBarText.innerText = `Active [${{activeMode}} - ${{currentTool.toUpperCase()}}]`;
           updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
         }} else {{
-          if (activeMode === '3D' && ['move', 'resize', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
+          if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) {{
             handleTransform(smoothedCursor, lastPinchPoint);
           }} else {{
             updatePreview(startPinchPoint, {{ x: smoothedCursor.x, y: smoothedCursor.y }});
@@ -823,7 +862,9 @@ html_code = f"""
     }} else {{
       statusDot.classList.remove('active');
       statusBarText.innerText = "Searching for hand...";
-      pinchIndicator.innerText = "Pinch Distance: --";
+      if (currentTool !== 'measure') {{
+        pinchIndicator.innerText = "Pinch Distance: --";
+      }}
       if (activeMode === '3D') {{
         cursorMesh.position.set(2000, 2000, 0);
       }}
@@ -839,7 +880,7 @@ html_code = f"""
     modelComplexity: 1,
     minDetectionConfidence: 0.65,
     minTrackingConfidence: 0.65
-  }});
+  });
 
   hands.onResults(onResults);
 
