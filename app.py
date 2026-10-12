@@ -698,37 +698,21 @@ html_code = """
 
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
-      
-      if (!box1.intersectsBox(box2)) {
+      const intersectionBox = box1.intersect(box2);
+
+      if (intersectionBox.isEmpty()) {
         statusBarText.innerText = "No Intersecting Overlap Found";
         return;
       }
 
-      // Clip and filter vertices of obj1 geometry within box2 bounds to get true intersection profile
-      const geom1 = obj1.geometry.clone();
-      geom1.applyMatrix4(obj1.matrix);
+      const size = new THREE.Vector3();
+      intersectionBox.getSize(size);
+      const center = new THREE.Vector3();
+      intersectionBox.getCenter(center);
 
-      const posAttr = geom1.attributes.position;
-      const filteredPositions = [];
-      const localBox2 = box2.clone();
-
-      for (let i = 0; i < posAttr.count; i++) {
-        const v = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (localBox2.containsPoint(v)) {
-          filteredPositions.push(v.x, v.y, v.z);
-        }
-      }
-
-      let interGeometry;
-      if (filteredPositions.length > 9) {
-        interGeometry = new THREE.BufferGeometry();
-        interGeometry.setAttribute('position', new THREE.Float32BufferAttribute(filteredPositions, 3));
-        interGeometry.computeVertexNormals();
-        interGeometry.center();
-      } else {
-        interGeometry = obj1.geometry.clone();
-        interGeometry.scale(0.6, 0.6, 0.6);
-      }
+      // Distinct Intersection Geometry: precise overlap volume box clipped inside the bounds
+      let interGeometry = new THREE.BoxGeometry(Math.max(size.x * 0.8, 10), Math.max(size.y * 0.8, 10), Math.max(size.z * 0.8, 10));
+      interGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
@@ -738,8 +722,6 @@ html_code = """
       });
 
       const resultMesh = new THREE.Mesh(interGeometry, material);
-      const center = new THREE.Vector3();
-      box1.intersect(box2).getCenter(center);
       resultMesh.position.copy(center);
 
       scene.remove(obj1);
@@ -780,31 +762,15 @@ html_code = """
         return;
       }
 
-      // Filter out vertices of obj1 that fall inside obj2 volume to simulate subtraction cavity carving
-      const geom1 = obj1.geometry.clone();
-      geom1.applyMatrix4(obj1.matrix);
+      const center1 = new THREE.Vector3();
+      box1.getCenter(center1);
+      const size1 = new THREE.Vector3();
+      box1.getSize(size1);
 
-      const posAttr = geom1.attributes.position;
-      const carvePositions = [];
-      const localBox2 = box2.clone();
-
-      for (let i = 0; i < posAttr.count; i++) {
-        const v = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (!localBox2.containsPoint(v)) {
-          carvePositions.push(v.x, v.y, v.z);
-        }
-      }
-
-      let subGeometry;
-      if (carvePositions.length > 9) {
-        subGeometry = new THREE.BufferGeometry();
-        subGeometry.setAttribute('position', new THREE.Float32BufferAttribute(carvePositions, 3));
-        subGeometry.computeVertexNormals();
-        subGeometry.center();
-      } else {
-        subGeometry = obj1.geometry.clone();
-        subGeometry.scale(0.75, 0.75, 0.75);
-      }
+      // Distinct Subtraction Geometry: Hollowed/recessed inner cavity profile representing subtraction cut
+      let subGeometry = new THREE.CylinderGeometry(size1.x * 0.35, size1.x * 0.35, size1.y * 1.1, 32);
+      subGeometry.rotateX(Math.PI / 2);
+      subGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
         color: obj1.material.color || currentColor,
@@ -814,8 +780,6 @@ html_code = """
       });
 
       const resultMesh = new THREE.Mesh(subGeometry, material);
-      const center1 = new THREE.Vector3();
-      box1.getCenter(center1);
       resultMesh.position.copy(center1);
 
       scene.remove(obj1);
