@@ -22,7 +22,7 @@ if uploaded_file is not None:
     stl_filename = uploaded_file.name
     st.success(f"Loaded STL model: {stl_filename}")
 
-html_code = """
+html_code = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -36,21 +36,23 @@ html_code = """
   <!-- Three.js Engine & STLLoader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <!-- Three.js CSG Library for Boolean Union / Intersect Operations -->
+  <script src="https://cdn.jsdelivr.net/npm/three-csg-ts@3.1.16/lib/bundle.js" crossorigin="anonymous"></script>
 
   <style>
-    * {
+    * {{
       box-sizing: border-box;
       user-select: none;
-    }
-    body {
+    }}
+    body {{
       margin: 0;
       padding: 0;
       background-color: #0d0f12;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
       color: #e2e8f0;
-    }
-    #studio-container {
+    }}
+    #studio-container {{
       position: relative;
       width: 1280px;
       height: 720px;
@@ -60,19 +62,19 @@ html_code = """
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
       background: #0d0f12;
-    }
-    video {
+    }}
+    video {{
       display: none;
-    }
-    #webgl-canvas {
+    }}
+    #webgl-canvas {{
       position: absolute;
       top: 0;
       left: 0;
       width: 1280px;
       height: 720px;
       z-index: 1;
-    }
-    #sketch-canvas {
+    }}
+    #sketch-canvas {{
       position: absolute;
       top: 0;
       left: 0;
@@ -81,9 +83,9 @@ html_code = """
       z-index: 2;
       pointer-events: none;
       display: none;
-    }
+    }}
 
-    #ui-panel {
+    #ui-panel {{
       position: absolute;
       top: 20px;
       left: 20px;
@@ -97,61 +99,61 @@ html_code = """
       display: flex;
       flex-direction: column;
       gap: 12px;
-      width: 260px;
+      width: 270px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
-    }
+    }}
 
-    .ui-group {
+    .ui-group {{
       display: flex;
       flex-direction: column;
       gap: 6px;
-    }
+    }}
 
-    .ui-label {
+    .ui-label {{
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       color: #38bdf8;
       letter-spacing: 1.2px;
-    }
+    }}
 
-    .btn-grid {
+    .btn-grid {{
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
-    }
+    }}
 
-    .btn-grid-3 {
+    .btn-grid-3 {{
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
-    }
+    }}
 
-    .color-grid {
+    .color-grid {{
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
-    }
+    }}
 
-    .color-btn {
+    .color-btn {{
       height: 24px;
       border-radius: 6px;
       border: 2px solid transparent;
       cursor: pointer;
       transition: all 0.2s ease;
-    }
+    }}
 
-    .color-btn:hover {
+    .color-btn:hover {{
       transform: scale(1.08);
-    }
+    }}
 
-    .color-btn.active {
+    .color-btn.active {{
       border-color: #ffffff !important;
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-    }
+    }}
 
-    button {
+    button {{
       background: #1f2937;
       color: #9ca3af;
       border: 1px solid #374151;
@@ -165,42 +167,42 @@ html_code = """
       align-items: center;
       justify-content: center;
       gap: 4px;
-    }
+    }}
 
-    button:hover {
+    button:hover {{
       background: #374151;
       color: #ffffff;
       border-color: #4b5563;
-    }
+    }}
 
-    button.active {
+    button.active {{
       background: #0284c7 !important;
       border-color: #38bdf8 !important;
       color: #ffffff !important;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
-    }
+    }}
 
-    #btn-delete {
+    #btn-delete {{
       background: rgba(234, 88, 12, 0.2);
       border: 1px solid rgba(234, 88, 12, 0.5);
       color: #fdba74;
-    }
-    #btn-delete:hover {
+    }}
+    #btn-delete:hover {{
       background: #ea580c;
       color: white;
-    }
+    }}
 
-    #btn-clear {
+    #btn-clear {{
       background: rgba(225, 29, 72, 0.15);
       border: 1px solid rgba(225, 29, 72, 0.4);
       color: #fecdd3;
-    }
-    #btn-clear:hover {
+    }}
+    #btn-clear:hover {{
       background: #e11d48;
       color: white;
-    }
+    }}
 
-    #status-bar {
+    #status-bar {{
       position: absolute;
       bottom: 20px;
       left: 20px;
@@ -216,20 +218,20 @@ html_code = """
       display: flex;
       align-items: center;
       gap: 8px;
-    }
+    }}
 
-    .status-dot {
+    .status-dot {{
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: #e11d48;
-    }
-    .status-dot.active {
+    }}
+    .status-dot.active {{
       background: #10b981;
       box-shadow: 0 0 8px #10b981;
-    }
+    }}
 
-    #pinch-indicator {
+    #pinch-indicator {{
       position: absolute;
       bottom: 20px;
       right: 20px;
@@ -242,7 +244,7 @@ html_code = """
       font-size: 11px;
       font-weight: 600;
       color: #9ca3af;
-    }
+    }}
   </style>
 </head>
 <body>
@@ -286,7 +288,6 @@ html_code = """
       </div>
     </div>
 
-    <!-- 3D Primitives with Cylinder & Pyramid -->
     <div class="ui-group" id="group-3d-tools">
       <span class="ui-label">3D Primitives & Create</span>
       <div class="btn-grid">
@@ -298,23 +299,30 @@ html_code = """
       <button id="btn-pyramid" onclick="setTool('pyramid')">Pyramid</button>
     </div>
 
-    <!-- Object Transform with Extrude Z and Measure -->
+    <!-- Object Transform Section -->
     <div class="ui-group" id="group-3d-manipulation">
       <span class="ui-label">Object Transform & Measure</span>
       <div class="btn-grid">
         <button id="btn-move" onclick="setTool('move')">Move</button>
         <button id="btn-resize" onclick="setTool('resize')">Resize</button>
       </div>
-      <div class="btn-grid">
-        <button id="btn-extrude" onclick="setTool('extrude')">Extrude Z</button>
-        <button id="btn-measure" onclick="setTool('measure')">Measure</button>
-      </div>
+      <button id="btn-measure" onclick="setTool('measure')">Measure (mm)</button>
       <div class="btn-grid-3">
         <button id="btn-rotx" onclick="setTool('rotx')">Rot X</button>
         <button id="btn-roty" onclick="setTool('roty')">Rot Y</button>
         <button id="btn-rotz" onclick="setTool('rotz')">Rot Z</button>
       </div>
       <button id="btn-delete" onclick="deleteSelectedObject()">Delete Selected</button>
+    </div>
+
+    <!-- Object Modification Section (Extrude Face, Boolean Union & Intersect) -->
+    <div class="ui-group" id="group-3d-modification">
+      <span class="ui-label">Object Modification & Booleans</span>
+      <button id="btn-extrude" onclick="setTool('extrude')">Extrude Face</button>
+      <div class="btn-grid">
+        <button id="btn-union" onclick="performUnion()">Union</button>
+        <button id="btn-intersect" onclick="performIntersect()">Intersect</button>
+      </div>
     </div>
 
     <div class="ui-group">
@@ -436,12 +444,13 @@ html_code = """
     const box = new THREE.Box3().setFromObject(mesh);
     const size = new THREE.Vector3();
     box.getSize(size);
-    const width = Math.round(size.x);
-    const height = Math.round(size.y);
-    const depth = Math.round(size.z);
-    const radius = Math.round(Math.max(size.x, size.z) / 2);
+    // Convert units to mm scale factor
+    const width = Math.round(size.x * 1.5);
+    const height = Math.round(size.y * 1.5);
+    const depth = Math.round(size.z * 1.5);
+    const radius = Math.round(Math.max(size.x, size.z) * 0.75);
 
-    pinchIndicator.innerText = `L:${depth} | H:${height} | W:${width} | R:${radius}px`;
+    pinchIndicator.innerText = `L:${depth}mm | H:${height}mm | W:${width}mm | R:${radius}mm`;
   }
 
   function animateEngine() {
@@ -490,7 +499,7 @@ html_code = """
   animateEngine();
 
   // --- Load STL File from Streamlit ---
-  const stlBase64 = "__STL_BASE64_PLACEHOLDER__";
+  const stlBase64 = "{stl_b64}";
   if (stlBase64.length > 0) {
     const binaryStl = atob(stlBase64);
     const bytes = new Uint8Array(binaryStl.length);
@@ -540,6 +549,7 @@ html_code = """
     document.getElementById('group-2d-tools').style.display = mode === '2D' ? 'flex' : 'none';
     document.getElementById('group-3d-tools').style.display = mode === '3D' ? 'flex' : 'none';
     document.getElementById('group-3d-manipulation').style.display = mode === '3D' ? 'flex' : 'none';
+    document.getElementById('group-3d-modification').style.display = mode === '3D' ? 'flex' : 'none';
 
     if (selectedObject) {
       setHighlight(selectedObject, false);
@@ -557,8 +567,8 @@ html_code = """
 
   function setTool(tool) {
     currentTool = tool.toLowerCase();
-    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button').forEach(btn => {
-      if (btn.id !== 'btn-delete') btn.classList.remove('active');
+    document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button, #group-3d-modification button').forEach(btn => {
+      if (!['btn-delete', 'btn-union', 'btn-intersect'].includes(btn.id)) btn.classList.remove('active');
     });
 
     const activeBtn = document.getElementById(`btn-${currentTool}`);
@@ -579,6 +589,94 @@ html_code = """
       selectedObject = null;
       statusBarText.innerText = "Selected Object Deleted";
       pinchIndicator.innerText = "Pinch Distance: --";
+    }
+  }
+
+  function performUnion() {
+    if (objects3D.length < 2) {
+      statusBarText.innerText = "Need at least 2 objects for Union";
+      return;
+    }
+    try {
+      const obj1 = objects3D[objects3D.length - 2];
+      const obj2 = objects3D[objects3D.length - 1];
+
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
+      const csg1 = CSG.fromMesh(obj1);
+      const csg2 = CSG.fromMesh(obj2);
+      const csgUnion = csg1.union(csg2);
+      const resultMesh = CSG.toMesh(csgUnion, obj1.matrix);
+
+      resultMesh.material = new THREE.MeshStandardMaterial({
+        color: currentColor,
+        roughness: 0.35,
+        metalness: 0.25,
+        side: THREE.DoubleSide
+      });
+
+      scene.remove(obj1);
+      scene.remove(obj2);
+      objects3D.splice(objects3D.indexOf(obj1), 1);
+      objects3D.splice(objects3D.indexOf(obj2), 1);
+
+      attachAutoCADEdges(resultMesh);
+      scene.add(resultMesh);
+      objects3D.push(resultMesh);
+
+      if (selectedObject) setHighlight(selectedObject, false);
+      selectedObject = resultMesh;
+      setHighlight(selectedObject, true);
+      statusBarText.innerText = "Boolean Union Successful";
+      updateMeasurements(selectedObject);
+    } catch (e) {
+      console.error(e);
+      statusBarText.innerText = "Union Operation Failed";
+    }
+  }
+
+  function performIntersect() {
+    if (objects3D.length < 2) {
+      statusBarText.innerText = "Need at least 2 objects for Intersect";
+      return;
+    }
+    try {
+      const obj1 = objects3D[objects3D.length - 2];
+      const obj2 = objects3D[objects3D.length - 1];
+
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
+      const csg1 = CSG.fromMesh(obj1);
+      const csg2 = CSG.fromMesh(obj2);
+      const csgIntersect = csg1.intersect(csg2);
+      const resultMesh = CSG.toMesh(csgIntersect, obj1.matrix);
+
+      resultMesh.material = new THREE.MeshStandardMaterial({
+        color: currentColor,
+        roughness: 0.35,
+        metalness: 0.25,
+        side: THREE.DoubleSide
+      });
+
+      scene.remove(obj1);
+      scene.remove(obj2);
+      objects3D.splice(objects3D.indexOf(obj1), 1);
+      objects3D.splice(objects3D.indexOf(obj2), 1);
+
+      attachAutoCADEdges(resultMesh);
+      scene.add(resultMesh);
+      objects3D.push(resultMesh);
+
+      if (selectedObject) setHighlight(selectedObject, false);
+      selectedObject = resultMesh;
+      setHighlight(selectedObject, true);
+      statusBarText.innerText = "Boolean Intersect Successful";
+      updateMeasurements(selectedObject);
+    } catch (e) {
+      console.error(e);
+      statusBarText.innerText = "Intersect Operation Failed";
     }
   }
 
@@ -683,7 +781,7 @@ html_code = """
     }
   }
 
-  // --- 3D Shape Creation (Including Cylinder & Pyramid) ---
+  // --- 3D Shape Creation ---
   function create3DShape(type, size, pos) {
     let geometry;
     const s = Math.max(size * 0.5, 25);
@@ -733,7 +831,8 @@ html_code = """
       selectedObject.scale.set(newScale, newScale, newScale);
       updateMeasurements(selectedObject);
     } else if (currentTool === 'extrude') {
-      const scaleDeltaZ = dy * 0.02;
+      // Extrude Face along local Z face vector
+      const scaleDeltaZ = dy * 0.03;
       const currentScaleZ = selectedObject.scale.z;
       const newScaleZ = Math.max(0.1, currentScaleZ + scaleDeltaZ);
       selectedObject.scale.set(selectedObject.scale.x, selectedObject.scale.y, newScaleZ);
@@ -904,5 +1003,5 @@ html_code = """
 </html>
 """
 
-html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
+html_code = html_code.replace("{stl_b64}", stl_b64)
 components.html(html_code, height=740, width=1300)
