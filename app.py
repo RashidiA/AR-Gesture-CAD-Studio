@@ -22,7 +22,7 @@ if uploaded_file is not None:
     stl_filename = uploaded_file.name
     st.success(f"Loaded STL model: {stl_filename}")
 
-html_code = f"""
+html_code = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -40,19 +40,19 @@ html_code = f"""
   <script src="https://cdn.jsdelivr.net/npm/three-csg-ts@3.1.16/lib/bundle.js" crossorigin="anonymous"></script>
 
   <style>
-    * {{
+    * {
       box-sizing: border-box;
       user-select: none;
-    }}
-    body {{
+    }
+    body {
       margin: 0;
       padding: 0;
       background-color: #0d0f12;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
       color: #e2e8f0;
-    }}
-    #studio-container {{
+    }
+    #studio-container {
       position: relative;
       width: 1280px;
       height: 720px;
@@ -62,19 +62,19 @@ html_code = f"""
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
       background: #0d0f12;
-    }}
-    video {{
+    }
+    video {
       display: none;
-    }}
-    #webgl-canvas {{
+    }
+    #webgl-canvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 1280px;
       height: 720px;
       z-index: 1;
-    }}
-    #sketch-canvas {{
+    }
+    #sketch-canvas {
       position: absolute;
       top: 0;
       left: 0;
@@ -83,9 +83,9 @@ html_code = f"""
       z-index: 2;
       pointer-events: none;
       display: none;
-    }}
+    }
 
-    #ui-panel {{
+    #ui-panel {
       position: absolute;
       top: 20px;
       left: 20px;
@@ -102,58 +102,58 @@ html_code = f"""
       width: 270px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
-    }}
+    }
 
-    .ui-group {{
+    .ui-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
-    }}
+    }
 
-    .ui-label {{
+    .ui-label {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       color: #38bdf8;
       letter-spacing: 1.2px;
-    }}
+    }
 
-    .btn-grid {{
+    .btn-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
-    }}
+    }
 
-    .btn-grid-3 {{
+    .btn-grid-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
-    }}
+    }
 
-    .color-grid {{
+    .color-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
-    }}
+    }
 
-    .color-btn {{
+    .color-btn {
       height: 24px;
       border-radius: 6px;
       border: 2px solid transparent;
       cursor: pointer;
       transition: all 0.2s ease;
-    }}
+    }
 
-    .color-btn:hover {{
+    .color-btn:hover {
       transform: scale(1.08);
-    }}
+    }
 
-    .color-btn.active {{
+    .color-btn.active {
       border-color: #ffffff !important;
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-    }}
+    }
 
-    button {{
+    button {
       background: #1f2937;
       color: #9ca3af;
       border: 1px solid #374151;
@@ -167,42 +167,42 @@ html_code = f"""
       align-items: center;
       justify-content: center;
       gap: 4px;
-    }}
+    }
 
-    button:hover {{
+    button:hover {
       background: #374151;
       color: #ffffff;
       border-color: #4b5563;
-    }}
+    }
 
-    button.active {{
+    button.active {
       background: #0284c7 !important;
       border-color: #38bdf8 !important;
       color: #ffffff !important;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
-    }}
+    }
 
-    #btn-delete {{
+    #btn-delete {
       background: rgba(234, 88, 12, 0.2);
       border: 1px solid rgba(234, 88, 12, 0.5);
       color: #fdba74;
-    }}
-    #btn-delete:hover {{
+    }
+    #btn-delete:hover {
       background: #ea580c;
       color: white;
-    }}
+    }
 
-    #btn-clear {{
+    #btn-clear {
       background: rgba(225, 29, 72, 0.15);
       border: 1px solid rgba(225, 29, 72, 0.4);
       color: #fecdd3;
-    }}
-    #btn-clear:hover {{
+    }
+    #btn-clear:hover {
       background: #e11d48;
       color: white;
-    }}
+    }
 
-    #status-bar {{
+    #status-bar {
       position: absolute;
       bottom: 20px;
       left: 20px;
@@ -218,20 +218,20 @@ html_code = f"""
       display: flex;
       align-items: center;
       gap: 8px;
-    }}
+    }
 
-    .status-dot {{
+    .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: #e11d48;
-    }}
-    .status-dot.active {{
+    }
+    .status-dot.active {
       background: #10b981;
       box-shadow: 0 0 8px #10b981;
-    }}
+    }
 
-    #pinch-indicator {{
+    #pinch-indicator {
       position: absolute;
       bottom: 20px;
       right: 20px;
@@ -244,7 +244,7 @@ html_code = f"""
       font-size: 11px;
       font-weight: 600;
       color: #9ca3af;
-    }}
+    }
   </style>
 </head>
 <body>
@@ -444,7 +444,6 @@ html_code = f"""
     const box = new THREE.Box3().setFromObject(mesh);
     const size = new THREE.Vector3();
     box.getSize(size);
-    // Convert units to mm scale factor
     const width = Math.round(size.x * 1.5);
     const height = Math.round(size.y * 1.5);
     const depth = Math.round(size.z * 1.5);
@@ -499,7 +498,7 @@ html_code = f"""
   animateEngine();
 
   // --- Load STL File from Streamlit ---
-  const stlBase64 = "{stl_b64}";
+  const stlBase64 = "__STL_BASE64_PLACEHOLDER__";
   if (stlBase64.length > 0) {
     const binaryStl = atob(stlBase64);
     const bytes = new Uint8Array(binaryStl.length);
@@ -831,7 +830,6 @@ html_code = f"""
       selectedObject.scale.set(newScale, newScale, newScale);
       updateMeasurements(selectedObject);
     } else if (currentTool === 'extrude') {
-      // Extrude Face along local Z face vector
       const scaleDeltaZ = dy * 0.03;
       const currentScaleZ = selectedObject.scale.z;
       const newScaleZ = Math.max(0.1, currentScaleZ + scaleDeltaZ);
@@ -1003,5 +1001,5 @@ html_code = f"""
 </html>
 """
 
-html_code = html_code.replace("{stl_b64}", stl_b64)
+html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
 components.html(html_code, height=740, width=1300)
