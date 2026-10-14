@@ -191,6 +191,16 @@ html_code = """
       color: white;
     }
 
+    #btn-undo {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+    }
+    #btn-undo:hover {
+      background: #0284c7;
+      color: white;
+    }
+
     #btn-clear {
       background: rgba(225, 29, 72, 0.15);
       border: 1px solid rgba(225, 29, 72, 0.4);
@@ -327,7 +337,10 @@ html_code = """
 
     <div class="ui-group">
       <span class="ui-label">Controls</span>
-      <button id="btn-clear" onclick="clearCanvas()">Clear All Shapes</button>
+      <div class="btn-grid">
+        <button id="btn-undo" onclick="performUndo()">Undo (1 Step)</button>
+        <button id="btn-clear" onclick="clearCanvas()">Clear All</button>
+      </div>
     </div>
   </div>
 
@@ -363,6 +376,7 @@ html_code = """
 
   let permanentDrawings = [];
   let currentPreviewShape = null;
+  let historyStack = [];
 
   let smoothedCursor = { x: 640, y: 360 };
   const alpha = 0.25;
@@ -416,6 +430,62 @@ html_code = """
 
   const objects3D = [];
   let previewMesh3D = null;
+
+  function pushHistory() {
+    const stateSnapshot = objects3D.map(obj => ({
+      geometry: obj.geometry.clone(),
+      material: obj.material.clone(),
+      position: obj.position.clone(),
+      rotation: obj.rotation.clone(),
+      scale: obj.scale.clone(),
+      color: obj.material.color.getHexString()
+    }));
+    historyStack.push(stateSnapshot);
+    if (historyStack.length > 25) historyStack.shift();
+  }
+
+  function performUndo() {
+    if (historyStack.length === 0) {
+      statusBarText.innerText = "No previous action to undo";
+      return;
+    }
+    const prevState = historyStack.pop();
+
+    objects3D.forEach(obj => {
+      scene.remove(obj);
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    });
+    objects3D.length = 0;
+    selectedObject = null;
+    if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
+
+    prevState.forEach(data => {
+      const mat = new THREE.MeshStandardMaterial({
+        color: '#' + data.color,
+        roughness: 0.35,
+        metalness: 0.25,
+        emissive: 0x000000,
+        side: THREE.DoubleSide
+      });
+      const mesh = new THREE.Mesh(data.geometry, mat);
+      mesh.position.copy(data.position);
+      mesh.rotation.copy(data.rotation);
+      mesh.scale.copy(data.scale);
+      attachAutoCADEdges(mesh);
+      scene.add(mesh);
+      objects3D.push(mesh);
+    });
+
+    if (objects3D.length > 0) {
+      selectedObject = objects3D[objects3D.length - 1];
+      setHighlight(selectedObject, true);
+      updateMeasurements(selectedObject);
+    } else {
+      pinchIndicator.innerText = "Pinch Distance: --";
+    }
+    statusBarText.innerText = "Undo Successful (1 Step Back)";
+  }
 
   function attachAutoCADEdges(mesh) {
     const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 25);
@@ -598,7 +668,7 @@ html_code = """
   function setTool(tool) {
     currentTool = tool.toLowerCase();
     document.querySelectorAll('#group-2d-tools button, #group-3d-tools button, #group-3d-manipulation button, #group-3d-modification button').forEach(btn => {
-      if (!['btn-delete', 'btn-union', 'btn-intersect', 'btn-subtract'].includes(btn.id)) btn.classList.remove('active');
+      if (!['btn-delete', 'btn-union', 'btn-intersect', 'btn-subtract', 'btn-undo'].includes(btn.id)) btn.classList.remove('active');
     });
 
     const activeBtn = document.getElementById(`btn-${currentTool}`);
@@ -613,6 +683,7 @@ html_code = """
 
   function deleteSelectedObject() {
     if (selectedObject && activeMode === '3D') {
+      pushHistory();
       scene.remove(selectedObject);
       const index = objects3D.indexOf(selectedObject);
       if (index > -1) {
@@ -644,6 +715,7 @@ html_code = """
       return;
     }
     try {
+      pushHistory();
       const { obj1, obj2 } = pair;
       obj1.updateMatrix();
       obj2.updateMatrix();
@@ -692,6 +764,7 @@ html_code = """
       return;
     }
     try {
+      pushHistory();
       const { obj1, obj2 } = pair;
       obj1.updateMatrix();
       obj2.updateMatrix();
@@ -710,8 +783,9 @@ html_code = """
       const center = new THREE.Vector3();
       intersectionBox.getCenter(center);
 
-      // Distinct Intersection Geometry: precise overlap volume box clipped inside the bounds
-      let interGeometry = new THREE.BoxGeometry(Math.max(size.x * 0.8, 10), Math.max(size.y * 0.8, 10), Math.max(size.z * 0.8, 10));
+      // Retain obj1 shape profile scaled down for intersection
+      let interGeometry = obj1.geometry.clone();
+      interGeometry.scale(0.65, 0.65, 0.65);
       interGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
@@ -750,6 +824,7 @@ html_code = """
       return;
     }
     try {
+      pushHistory();
       const { obj1, obj2 } = pair;
       obj1.updateMatrix();
       obj2.updateMatrix();
@@ -764,12 +839,10 @@ html_code = """
 
       const center1 = new THREE.Vector3();
       box1.getCenter(center1);
-      const size1 = new THREE.Vector3();
-      box1.getSize(size1);
 
-      // Distinct Subtraction Geometry: Hollowed/recessed inner cavity profile representing subtraction cut
-      let subGeometry = new THREE.CylinderGeometry(size1.x * 0.35, size1.x * 0.35, size1.y * 1.1, 32);
-      subGeometry.rotateX(Math.PI / 2);
+      // Retain target object's geometry profile (Sphere, Cube, STL, etc.) with cavity scaling
+      let subGeometry = obj1.geometry.clone();
+      subGeometry.scale(0.75, 0.75, 0.75);
       subGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
@@ -803,6 +876,7 @@ html_code = """
 
   function clearCanvas() {
     if (activeMode === '3D') {
+      pushHistory();
       objects3D.forEach(obj => {
         scene.remove(obj);
         if (obj.geometry) obj.geometry.dispose();
@@ -993,6 +1067,7 @@ html_code = """
   function finalizeShape() {
     if (activeMode === '3D') {
       if (previewMesh3D) {
+        pushHistory();
         objects3D.push(previewMesh3D);
         if (selectedObject) setHighlight(selectedObject, false);
         selectedObject = previewMesh3D;
