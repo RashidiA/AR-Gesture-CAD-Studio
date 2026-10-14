@@ -1,8 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
-import cv2
-import numpy as np
 
 st.set_page_config(
     page_title="AR Gesture CAD Studio", 
@@ -17,43 +15,21 @@ st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine
 col_up1, col_up2 = st.columns(2)
 
 stl_b64 = ""
-img_points_json = "[]"
+img_b64 = ""
 
 with col_up1:
     uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)", type=["stl"])
     if uploaded_file is not None:
         stl_bytes = uploaded_file.read()
-        stl_b64 = base64.b64encode(stl_bytes).decode("text/plain" if hasattr(base64, "text") else "utf-8")
+        stl_b64 = base64.b64encode(stl_bytes).decode("utf-8")
         st.success(f"Loaded STL model: {uploaded_file.name}")
 
 with col_up2:
     uploaded_image = st.file_uploader("🖼️ Upload 2D Image/Sketch (PNG/JPG) to Convert to 3D", type=["png", "jpg", "jpeg"])
     if uploaded_image is not None:
-        file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
-        img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
-        
-        if img_cv is not None:
-            # Resize for stable contour extraction
-            img_cv = cv2.resize(img_cv, (150, 150))
-            _, thresh = cv2.threshold(img_cv, 127, 255, cv2.THRESH_BINARY_INV)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            pts = []
-            if contours:
-                # Find largest contour
-                largest_c = max(contours, key=cv2.contourArea)
-                for pt in largest_c:
-                    # Scale coordinates to 3D studio world space
-                    px = float(pt[0][0] - 75) * 1.5
-                    py = float(75 - pt[0][1]) * 1.5
-                    pts.append([px, py])
-            
-            if len(pts) > 3:
-                import json
-                img_points_json = json.dumps(pts)
-                st.success(f"Converted 2D image '{uploaded_image.name}' into 3D silhouette mesh!")
-            else:
-                st.warning("Could not clearly trace contours from image. Try a high-contrast drawing or silhouette.")
+        img_bytes = uploaded_image.read()
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+        st.success(f"Loaded 2D image '{uploaded_image.name}' for 3D extrusion!")
 
 html_code = """
 <!DOCTYPE html>
@@ -674,48 +650,70 @@ html_code = """
     updateMeasurements(selectedObject);
   }
 
-  // --- Load Uploaded 2D Image Contour Extrusion ---
-  const imgPointsData = __IMG_POINTS_JSON_PLACEHOLDER__;
-  if (imgPointsData && imgPointsData.length > 3) {
-    const shape = new THREE.Shape();
-    shape.moveTo(imgPointsData[0][0], imgPointsData[0][1]);
-    for (let i = 1; i < imgPointsData.length; i++) {
-      shape.lineTo(imgPointsData[i][0], imgPointsData[i][1]);
-    }
-    shape.closePath();
+  // --- Load Uploaded 2D Image Profile & Extrude to 3D in Browser ---
+  const imgB64 = "__IMG_BASE64_PLACEHOLDER__";
+  if (imgB64.length > 0) {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + imgB64;
+    img.onload = () => {
+      const canvas2D = document.createElement('canvas');
+      canvas2D.width = 128;
+      canvas2D.height = 128;
+      const ctx2D = canvas2D.getContext('2d');
+      ctx2D.drawImage(img, 0, 0, 128, 128);
+      const imgData = ctx2D.getImageData(0, 0, 128, 128).data;
 
-    const extrudeSettings = {
-      steps: 1,
-      depth: 40,
-      bevelEnabled: true,
-      bevelThickness: 4,
-      bevelSize: 2,
-      bevelSegments: 3
+      // Generate procedural 3D extruded shape based on image silhouette pixels
+      const shape = new THREE.Shape();
+      let hasStarted = false;
+      
+      for (let y = 0; y < 128; y += 4) {
+        for (let x = 0; x < 128; x += 4) {
+          const idx = (y * 128 + x) * 4;
+          const avg = (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
+          if (avg < 150) { // Dark silhouette contour
+            const px = (x - 64) * 1.2;
+            const py = (64 - y) * 1.2;
+            if (!hasStarted) {
+              shape.moveTo(px, py);
+              hasStarted = true;
+            } else {
+              shape.lineTo(px, py);
+            }
+          }
+        }
+      }
+      if (!hasStarted) {
+        shape.absarc(0, 0, 40, 0, Math.PI * 2, false);
+      } else {
+        shape.closePath();
+      }
+
+      const extrudeSettings = { steps: 1, depth: 35, bevelEnabled: true, bevelThickness: 3, bevelSize: 2 };
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geometry.center();
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
+        color: currentColor,
+        roughness: 0.35,
+        metalness: 0.25,
+        emissive: 0x000000,
+        side: THREE.DoubleSide
+      });
+
+      const imgMesh = new THREE.Mesh(geometry, material);
+      imgMesh.position.set(0, 0, 0);
+
+      attachAutoCADEdges(imgMesh);
+      scene.add(imgMesh);
+      objects3D.push(imgMesh);
+
+      if (selectedObject) setHighlight(selectedObject, false);
+      selectedObject = imgMesh;
+      setHighlight(selectedObject, true);
+      updateMeasurements(selectedObject);
     };
-
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    geometry.center();
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshStandardMaterial({
-      color: currentColor,
-      roughness: 0.35,
-      metalness: 0.25,
-      emissive: 0x000000,
-      side: THREE.DoubleSide
-    });
-
-    const imgMesh = new THREE.Mesh(geometry, material);
-    imgMesh.position.set(0, 0, 0);
-
-    attachAutoCADEdges(imgMesh);
-    scene.add(imgMesh);
-    objects3D.push(imgMesh);
-
-    if (selectedObject) setHighlight(selectedObject, false);
-    selectedObject = imgMesh;
-    setHighlight(selectedObject, true);
-    updateMeasurements(selectedObject);
   }
 
   function switchMode(mode) {
@@ -1270,5 +1268,5 @@ html_code = """
 """
 
 html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
-html_code = html_code.replace("__IMG_POINTS_JSON_PLACEHOLDER__", img_points_json)
+html_code = html_code.replace("__IMG_BASE64_PLACEHOLDER__", img_b64)
 components.html(html_code, height=740, width=1300)
