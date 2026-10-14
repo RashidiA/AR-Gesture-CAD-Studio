@@ -766,6 +766,9 @@ html_code = """
     try {
       pushHistory();
       const { obj1, obj2 } = pair;
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
       const intersectionBox = box1.intersect(box2);
@@ -778,8 +781,9 @@ html_code = """
       const center = new THREE.Vector3();
       intersectionBox.getCenter(center);
 
-      // Preserve the exact source geometry profile of obj1 (Sphere, Cube, STL, etc.)
+      // Preserve active selected object's own geometry profile (whether left or right shape)
       let interGeometry = obj1.geometry.clone();
+      interGeometry.applyMatrix4(obj1.matrix);
       interGeometry.scale(0.65, 0.65, 0.65);
       interGeometry.computeVertexNormals();
 
@@ -821,6 +825,9 @@ html_code = """
     try {
       pushHistory();
       const { obj1, obj2 } = pair;
+      obj1.updateMatrix();
+      obj2.updateMatrix();
+
       const box1 = new THREE.Box3().setFromObject(obj1);
       const box2 = new THREE.Box3().setFromObject(obj2);
 
@@ -832,8 +839,9 @@ html_code = """
       const center1 = new THREE.Vector3();
       box1.getCenter(center1);
 
-      // Preserve the exact source geometry profile of obj1 (Sphere, Cube, STL, etc.) for subtraction cavity
+      // Preserve active selected object's own unique geometry profile (Sphere, Cube, STL, etc.) for subtraction cavity
       let subGeometry = obj1.geometry.clone();
+      subGeometry.applyMatrix4(obj1.matrix);
       subGeometry.scale(0.75, 0.75, 0.75);
       subGeometry.computeVertexNormals();
 
