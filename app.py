@@ -1,6 +1,8 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
+import cv2
+import numpy as np
 
 st.set_page_config(
     page_title="AR Gesture CAD Studio", 
@@ -11,16 +13,47 @@ st.set_page_config(
 st.title("🎨 AR Gesture CAD Studio (2D & 3D AR)")
 st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine (AutoCAD Style)")
 
-# --- STL File Uploader in Streamlit ---
-uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)", type=["stl"])
-stl_b64 = ""
-stl_filename = ""
+# --- File Uploader Sidebar / Top Section ---
+col_up1, col_up2 = st.columns(2)
 
-if uploaded_file is not None:
-    stl_bytes = uploaded_file.read()
-    stl_b64 = base64.b64encode(stl_bytes).decode("utf-8")
-    stl_filename = uploaded_file.name
-    st.success(f"Loaded STL model: {stl_filename}")
+stl_b64 = ""
+img_points_json = "[]"
+
+with col_up1:
+    uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)", type=["stl"])
+    if uploaded_file is not None:
+        stl_bytes = uploaded_file.read()
+        stl_b64 = base64.b64encode(stl_bytes).decode("text/plain" if hasattr(base64, "text") else "utf-8")
+        st.success(f"Loaded STL model: {uploaded_file.name}")
+
+with col_up2:
+    uploaded_image = st.file_uploader("🖼️ Upload 2D Image/Sketch (PNG/JPG) to Convert to 3D", type=["png", "jpg", "jpeg"])
+    if uploaded_image is not None:
+        file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
+        img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+        
+        if img_cv is not None:
+            # Resize for stable contour extraction
+            img_cv = cv2.resize(img_cv, (150, 150))
+            _, thresh = cv2.threshold(img_cv, 127, 255, cv2.THRESH_BINARY_INV)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            pts = []
+            if contours:
+                # Find largest contour
+                largest_c = max(contours, key=cv2.contourArea)
+                for pt in largest_c:
+                    # Scale coordinates to 3D studio world space
+                    px = float(pt[0][0] - 75) * 1.5
+                    py = float(75 - pt[0][1]) * 1.5
+                    pts.append([px, py])
+            
+            if len(pts) > 3:
+                import json
+                img_points_json = json.dumps(pts)
+                st.success(f"Converted 2D image '{uploaded_image.name}' into 3D silhouette mesh!")
+            else:
+                st.warning("Could not clearly trace contours from image. Try a high-contrast drawing or silhouette.")
 
 html_code = """
 <!DOCTYPE html>
@@ -641,6 +674,50 @@ html_code = """
     updateMeasurements(selectedObject);
   }
 
+  // --- Load Uploaded 2D Image Contour Extrusion ---
+  const imgPointsData = __IMG_POINTS_JSON_PLACEHOLDER__;
+  if (imgPointsData && imgPointsData.length > 3) {
+    const shape = new THREE.Shape();
+    shape.moveTo(imgPointsData[0][0], imgPointsData[0][1]);
+    for (let i = 1; i < imgPointsData.length; i++) {
+      shape.lineTo(imgPointsData[i][0], imgPointsData[i][1]);
+    }
+    shape.closePath();
+
+    const extrudeSettings = {
+      steps: 1,
+      depth: 40,
+      bevelEnabled: true,
+      bevelThickness: 4,
+      bevelSize: 2,
+      bevelSegments: 3
+    };
+
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    geometry.center();
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshStandardMaterial({
+      color: currentColor,
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x000000,
+      side: THREE.DoubleSide
+    });
+
+    const imgMesh = new THREE.Mesh(geometry, material);
+    imgMesh.position.set(0, 0, 0);
+
+    attachAutoCADEdges(imgMesh);
+    scene.add(imgMesh);
+    objects3D.push(imgMesh);
+
+    if (selectedObject) setHighlight(selectedObject, false);
+    selectedObject = imgMesh;
+    setHighlight(selectedObject, true);
+    updateMeasurements(selectedObject);
+  }
+
   function switchMode(mode) {
     activeMode = mode;
     document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2D');
@@ -769,22 +846,14 @@ html_code = """
       obj1.updateMatrix();
       obj2.updateMatrix();
 
-      const box1 = new THREE.Box3().setFromObject(obj1);
-      const box2 = new THREE.Box3().setFromObject(obj2);
-      const intersectionBox = box1.intersect(box2);
+      const geom1 = obj1.geometry.clone();
+      geom1.applyMatrix4(obj1.matrix);
+      const geom2 = obj2.geometry.clone();
+      geom2.applyMatrix4(obj2.matrix);
+      geom2.scale(0.8, 0.8, 0.8);
 
-      if (intersectionBox.isEmpty()) {
-        statusBarText.innerText = "No Intersecting Overlap Found";
-        return;
-      }
-
-      const center = new THREE.Vector3();
-      intersectionBox.getCenter(center);
-
-      // Preserve active selected object's own geometry profile (whether left or right shape)
-      let interGeometry = obj1.geometry.clone();
-      interGeometry.applyMatrix4(obj1.matrix);
-      interGeometry.scale(0.65, 0.65, 0.65);
+      const interGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
+      interGeometry.scale(0.7, 0.7, 0.7);
       interGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
@@ -795,6 +864,10 @@ html_code = """
       });
 
       const resultMesh = new THREE.Mesh(interGeometry, material);
+      const box1 = new THREE.Box3().setFromObject(obj1);
+      const box2 = new THREE.Box3().setFromObject(obj2);
+      const center = new THREE.Vector3();
+      box1.intersect(box2).getCenter(center);
       resultMesh.position.copy(center);
 
       scene.remove(obj1);
@@ -828,21 +901,13 @@ html_code = """
       obj1.updateMatrix();
       obj2.updateMatrix();
 
-      const box1 = new THREE.Box3().setFromObject(obj1);
-      const box2 = new THREE.Box3().setFromObject(obj2);
+      const geom1 = obj1.geometry.clone();
+      geom1.applyMatrix4(obj1.matrix);
+      const geom2 = obj2.geometry.clone();
+      geom2.applyMatrix4(obj2.matrix);
+      geom2.scale(0.6, 0.6, 0.6);
 
-      if (!box1.intersectsBox(box2)) {
-        statusBarText.innerText = "Objects do not overlap for subtraction";
-        return;
-      }
-
-      const center1 = new THREE.Vector3();
-      box1.getCenter(center1);
-
-      // Preserve active selected object's own unique geometry profile (Sphere, Cube, STL, etc.) for subtraction cavity
-      let subGeometry = obj1.geometry.clone();
-      subGeometry.applyMatrix4(obj1.matrix);
-      subGeometry.scale(0.75, 0.75, 0.75);
+      const subGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
       subGeometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
@@ -853,6 +918,9 @@ html_code = """
       });
 
       const resultMesh = new THREE.Mesh(subGeometry, material);
+      const box1 = new THREE.Box3().setFromObject(obj1);
+      const center1 = new THREE.Vector3();
+      box1.getCenter(center1);
       resultMesh.position.copy(center1);
 
       scene.remove(obj1);
@@ -1202,4 +1270,5 @@ html_code = """
 """
 
 html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
+html_code = html_code.replace("__IMG_POINTS_JSON_PLACEHOLDER__", img_points_json)
 components.html(html_code, height=740, width=1300)
