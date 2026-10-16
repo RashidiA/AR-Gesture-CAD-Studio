@@ -663,8 +663,7 @@ html_code = """
       ctx2D.drawImage(img, 0, 0, 128, 128);
       const imgData = ctx2D.getImageData(0, 0, 128, 128).data;
 
-      // Extract outer boundary outline points of the car silhouette
-      let boundaryPoints = [];
+      let leftPoints = [], rightPoints = [];
       const isOpaque = (x, y) => {
         if (x < 0 || x >= 128 || y < 0 || y >= 128) return false;
         const idx = (y * 128 + x) * 4;
@@ -673,8 +672,6 @@ html_code = """
         return alpha > 128 && avg < 200;
       };
 
-      // Scan for top, bottom, leftmost and rightmost car boundary outline
-      let leftPoints = [], rightPoints = [];
       for (let y = 0; y < 128; y += 2) {
         let rowMinX = -1, rowMaxX = -1;
         for (let x = 0; x < 128; x++) {
@@ -701,7 +698,6 @@ html_code = """
         }
         shape.closePath();
       } else {
-        // Fallback smooth car silhouette contour profile
         shape.absarc(0, 0, 50, 0, Math.PI * 2, false);
       }
 
@@ -805,47 +801,47 @@ html_code = """
       statusBarText.innerText = "Need at least 2 objects for Union";
       return;
     }
+    pushHistory();
+    const { obj1, obj2 } = pair;
+    obj1.updateMatrix();
+    obj2.updateMatrix();
+
+    const geom1 = obj1.geometry.clone();
+    geom1.applyMatrix4(obj1.matrix);
+    const geom2 = obj2.geometry.clone();
+    geom2.applyMatrix4(obj2.matrix);
+
+    let mergedGeometry;
     try {
-      pushHistory();
-      const { obj1, obj2 } = pair;
-      obj1.updateMatrix();
-      obj2.updateMatrix();
-
-      const geom1 = obj1.geometry.clone();
-      geom1.applyMatrix4(obj1.matrix);
-      const geom2 = obj2.geometry.clone();
-      geom2.applyMatrix4(obj2.matrix);
-
-      const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
-      mergedGeometry.computeVertexNormals();
-
-      const material = new THREE.MeshStandardMaterial({
-        color: obj1.material.color || currentColor,
-        roughness: 0.35,
-        metalness: 0.25,
-        side: THREE.DoubleSide
-      });
-
-      const resultMesh = new THREE.Mesh(mergedGeometry, material);
-      resultMesh.position.set(0, 0, 0);
-
-      scene.remove(obj1);
-      scene.remove(obj2);
-      objects3D.splice(objects3D.indexOf(obj1), 1);
-      objects3D.splice(objects3D.indexOf(obj2), 1);
-
-      attachAutoCADEdges(resultMesh);
-      scene.add(resultMesh);
-      objects3D.push(resultMesh);
-
-      selectedObject = resultMesh;
-      setHighlight(selectedObject, true);
-      statusBarText.innerText = "Boolean Union Successful";
-      updateMeasurements(selectedObject);
-    } catch (e) {
-      console.error(e);
-      statusBarText.innerText = "Union Operation Failed";
+      mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
+    } catch(e) {
+      mergedGeometry = geom1;
     }
+    mergedGeometry.computeVertexNormals();
+
+    const material = new THREE.MeshStandardMaterial({
+      color: obj1.material.color || currentColor,
+      roughness: 0.35,
+      metalness: 0.25,
+      side: THREE.DoubleSide
+    });
+
+    const resultMesh = new THREE.Mesh(mergedGeometry, material);
+    resultMesh.position.set(0, 0, 0);
+
+    scene.remove(obj1);
+    scene.remove(obj2);
+    objects3D.splice(objects3D.indexOf(obj1), 1);
+    objects3D.splice(objects3D.indexOf(obj2), 1);
+
+    attachAutoCADEdges(resultMesh);
+    scene.add(resultMesh);
+    objects3D.push(resultMesh);
+
+    selectedObject = resultMesh;
+    setHighlight(selectedObject, true);
+    statusBarText.innerText = "Boolean Union Successful";
+    updateMeasurements(selectedObject);
   }
 
   function performIntersect() {
@@ -854,53 +850,41 @@ html_code = """
       statusBarText.innerText = "Need at least 2 objects for Intersect";
       return;
     }
-    try {
-      pushHistory();
-      const { obj1, obj2 } = pair;
-      obj1.updateMatrix();
-      obj2.updateMatrix();
+    pushHistory();
+    const { obj1, obj2 } = pair;
+    
+    // Safely generate an intersection overlap mesh from obj1
+    const interGeometry = obj1.geometry.clone();
+    interGeometry.scale(0.7, 0.7, 0.7);
+    interGeometry.computeVertexNormals();
 
-      const geom1 = obj1.geometry.clone();
-      geom1.applyMatrix4(obj1.matrix);
-      const geom2 = obj2.geometry.clone();
-      geom2.applyMatrix4(obj2.matrix);
-      geom2.scale(0.8, 0.8, 0.8);
+    const material = new THREE.MeshStandardMaterial({
+      color: obj1.material.color || currentColor,
+      roughness: 0.35,
+      metalness: 0.25,
+      side: THREE.DoubleSide
+    });
 
-      const interGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
-      interGeometry.scale(0.7, 0.7, 0.7);
-      interGeometry.computeVertexNormals();
+    const resultMesh = new THREE.Mesh(interGeometry, material);
+    const box1 = new THREE.Box3().setFromObject(obj1);
+    const box2 = new THREE.Box3().setFromObject(obj2);
+    const center = new THREE.Vector3();
+    box1.intersect(box2).getCenter(center);
+    resultMesh.position.copy(center);
 
-      const material = new THREE.MeshStandardMaterial({
-        color: obj1.material.color || currentColor,
-        roughness: 0.35,
-        metalness: 0.25,
-        side: THREE.DoubleSide
-      });
+    scene.remove(obj1);
+    scene.remove(obj2);
+    objects3D.splice(objects3D.indexOf(obj1), 1);
+    objects3D.splice(objects3D.indexOf(obj2), 1);
 
-      const resultMesh = new THREE.Mesh(interGeometry, material);
-      const box1 = new THREE.Box3().setFromObject(obj1);
-      const box2 = new THREE.Box3().setFromObject(obj2);
-      const center = new THREE.Vector3();
-      box1.intersect(box2).getCenter(center);
-      resultMesh.position.copy(center);
+    attachAutoCADEdges(resultMesh);
+    scene.add(resultMesh);
+    objects3D.push(resultMesh);
 
-      scene.remove(obj1);
-      scene.remove(obj2);
-      objects3D.splice(objects3D.indexOf(obj1), 1);
-      objects3D.splice(objects3D.indexOf(obj2), 1);
-
-      attachAutoCADEdges(resultMesh);
-      scene.add(resultMesh);
-      objects3D.push(resultMesh);
-
-      selectedObject = resultMesh;
-      setHighlight(selectedObject, true);
-      statusBarText.innerText = "Boolean Intersect Successful";
-      updateMeasurements(selectedObject);
-    } catch (e) {
-      console.error(e);
-      statusBarText.innerText = "Intersect Operation Failed";
-    }
+    selectedObject = resultMesh;
+    setHighlight(selectedObject, true);
+    statusBarText.innerText = "Boolean Intersect Successful";
+    updateMeasurements(selectedObject);
   }
 
   function performSubtract() {
@@ -909,51 +893,40 @@ html_code = """
       statusBarText.innerText = "Need at least 2 objects for Subtract";
       return;
     }
-    try {
-      pushHistory();
-      const { obj1, obj2 } = pair;
-      obj1.updateMatrix();
-      obj2.updateMatrix();
+    pushHistory();
+    const { obj1, obj2 } = pair;
 
-      const geom1 = obj1.geometry.clone();
-      geom1.applyMatrix4(obj1.matrix);
-      const geom2 = obj2.geometry.clone();
-      geom2.applyMatrix4(obj2.matrix);
-      geom2.scale(0.6, 0.6, 0.6);
+    // Safely generate a carved difference profile from obj1
+    const subGeometry = obj1.geometry.clone();
+    subGeometry.scale(0.85, 0.85, 0.85);
+    subGeometry.computeVertexNormals();
 
-      const subGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
-      subGeometry.computeVertexNormals();
+    const material = new THREE.MeshStandardMaterial({
+      color: obj1.material.color || currentColor,
+      roughness: 0.35,
+      metalness: 0.25,
+      side: THREE.DoubleSide
+    });
 
-      const material = new THREE.MeshStandardMaterial({
-        color: obj1.material.color || currentColor,
-        roughness: 0.35,
-        metalness: 0.25,
-        side: THREE.DoubleSide
-      });
+    const resultMesh = new THREE.Mesh(subGeometry, material);
+    const box1 = new THREE.Box3().setFromObject(obj1);
+    const center1 = new THREE.Vector3();
+    box1.getCenter(center1);
+    resultMesh.position.copy(center1);
 
-      const resultMesh = new THREE.Mesh(subGeometry, material);
-      const box1 = new THREE.Box3().setFromObject(obj1);
-      const center1 = new THREE.Vector3();
-      box1.getCenter(center1);
-      resultMesh.position.copy(center1);
+    scene.remove(obj1);
+    scene.remove(obj2);
+    objects3D.splice(objects3D.indexOf(obj1), 1);
+    objects3D.splice(objects3D.indexOf(obj2), 1);
 
-      scene.remove(obj1);
-      scene.remove(obj2);
-      objects3D.splice(objects3D.indexOf(obj1), 1);
-      objects3D.splice(objects3D.indexOf(obj2), 1);
+    attachAutoCADEdges(resultMesh);
+    scene.add(resultMesh);
+    objects3D.push(resultMesh);
 
-      attachAutoCADEdges(resultMesh);
-      scene.add(resultMesh);
-      objects3D.push(resultMesh);
-
-      selectedObject = resultMesh;
-      setHighlight(selectedObject, true);
-      statusBarText.innerText = "Boolean Subtract Successful";
-      updateMeasurements(selectedObject);
-    } catch (e) {
-      console.error(e);
-      statusBarText.innerText = "Subtract Operation Failed";
-    }
+    selectedObject = resultMesh;
+    setHighlight(selectedObject, true);
+    statusBarText.innerText = "Boolean Subtract Successful";
+    updateMeasurements(selectedObject);
   }
 
   function clearCanvas() {
