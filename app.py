@@ -853,7 +853,6 @@ html_code = """
     pushHistory();
     const { obj1, obj2 } = pair;
     
-    // Safely generate an intersection overlap mesh from obj1
     const interGeometry = obj1.geometry.clone();
     interGeometry.scale(0.7, 0.7, 0.7);
     interGeometry.computeVertexNormals();
@@ -896,7 +895,6 @@ html_code = """
     pushHistory();
     const { obj1, obj2 } = pair;
 
-    // Safely generate a carved difference profile from obj1
     const subGeometry = obj1.geometry.clone();
     subGeometry.scale(0.85, 0.85, 0.85);
     subGeometry.computeVertexNormals();
