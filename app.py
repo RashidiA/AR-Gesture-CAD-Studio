@@ -29,7 +29,7 @@ with col_up2:
     if uploaded_image is not None:
         img_bytes = uploaded_image.read()
         img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        st.success(f"Loaded 2D image '{uploaded_image.name}' for 3D extrusion!")
+        st.success(f"Loaded 2D image '{uploaded_image.name}' for solid 3D extrusion!")
 
 html_code = """
 <!DOCTYPE html>
@@ -650,7 +650,7 @@ html_code = """
     updateMeasurements(selectedObject);
   }
 
-  // --- Load Uploaded 2D Image Profile & Extrude to 3D in Browser ---
+  // --- Load Uploaded 2D Image Contour & Extrude to Solid 3D Shape ---
   const imgB64 = "__IMG_BASE64_PLACEHOLDER__";
   if (imgB64.length > 0) {
     const img = new Image();
@@ -663,33 +663,49 @@ html_code = """
       ctx2D.drawImage(img, 0, 0, 128, 128);
       const imgData = ctx2D.getImageData(0, 0, 128, 128).data;
 
-      // Generate procedural 3D extruded shape based on image silhouette pixels
-      const shape = new THREE.Shape();
-      let hasStarted = false;
-      
-      for (let y = 0; y < 128; y += 4) {
-        for (let x = 0; x < 128; x += 4) {
-          const idx = (y * 128 + x) * 4;
-          const avg = (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
-          if (avg < 150) { // Dark silhouette contour
-            const px = (x - 64) * 1.2;
-            const py = (64 - y) * 1.2;
-            if (!hasStarted) {
-              shape.moveTo(px, py);
-              hasStarted = true;
-            } else {
-              shape.lineTo(px, py);
-            }
+      // Extract outer boundary outline points of the car silhouette
+      let boundaryPoints = [];
+      const isOpaque = (x, y) => {
+        if (x < 0 || x >= 128 || y < 0 || y >= 128) return false;
+        const idx = (y * 128 + x) * 4;
+        const avg = (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
+        const alpha = imgData[idx+3];
+        return alpha > 128 && avg < 200;
+      };
+
+      // Scan for top, bottom, leftmost and rightmost car boundary outline
+      let leftPoints = [], rightPoints = [];
+      for (let y = 0; y < 128; y += 2) {
+        let rowMinX = -1, rowMaxX = -1;
+        for (let x = 0; x < 128; x++) {
+          if (isOpaque(x, y)) {
+            if (rowMinX === -1) rowMinX = x;
+            rowMaxX = x;
           }
         }
-      }
-      if (!hasStarted) {
-        shape.absarc(0, 0, 40, 0, Math.PI * 2, false);
-      } else {
-        shape.closePath();
+        if (rowMinX !== -1) {
+          leftPoints.push({ x: rowMinX, y: y });
+          rightPoints.unshift({ x: rowMaxX, y: y });
+        }
       }
 
-      const extrudeSettings = { steps: 1, depth: 35, bevelEnabled: true, bevelThickness: 3, bevelSize: 2 };
+      const contour = leftPoints.concat(rightPoints);
+      const shape = new THREE.Shape();
+
+      if (contour.length > 5) {
+        const first = contour[0];
+        shape.moveTo((first.x - 64) * 1.5, (64 - first.y) * 1.5);
+        for (let i = 1; i < contour.length; i++) {
+          const pt = contour[i];
+          shape.lineTo((pt.x - 64) * 1.5, (64 - pt.y) * 1.5);
+        }
+        shape.closePath();
+      } else {
+        // Fallback smooth car silhouette contour profile
+        shape.absarc(0, 0, 50, 0, Math.PI * 2, false);
+      }
+
+      const extrudeSettings = { steps: 1, depth: 45, bevelEnabled: true, bevelThickness: 3, bevelSize: 2 };
       const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       geometry.center();
       geometry.computeVertexNormals();
