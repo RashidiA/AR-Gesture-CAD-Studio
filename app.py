@@ -14,22 +14,15 @@ st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine
 # --- File Uploader Sidebar / Top Section ---
 col_up1, col_up2 = st.columns(2)
 
-cad_b64 = ""
-cad_type = ""
+stl_b64 = ""
 img_b64 = ""
 
 with col_up1:
-    # Expanded type list to support lowercase and uppercase extensions (.STL, .STEP, .STP)
-    uploaded_file = st.file_uploader("📂 Import 3D Model (.stl, .step, .stp)", type=["stl", "step", "stp", "STL", "STEP", "STP"])
+    uploaded_file = st.file_uploader("📂 Import 3D Model (.stl)", type=["stl", "STL"])
     if uploaded_file is not None:
-        cad_bytes = uploaded_file.read()
-        cad_b64 = base64.b64encode(cad_bytes).decode("utf-8")
-        filename_lower = uploaded_file.name.lower()
-        if filename_lower.endswith(".stl"):
-            cad_type = "stl"
-        elif filename_lower.endswith(".step") or filename_lower.endswith(".stp"):
-            cad_type = "step"
-        st.success(f"Loaded CAD model: {uploaded_file.name} ({cad_type.upper()})")
+        stl_bytes = uploaded_file.read()
+        stl_b64 = base64.b64encode(stl_bytes).decode("utf-8")
+        st.success(f"Loaded STL model: {uploaded_file.name}")
 
 with col_up2:
     uploaded_image = st.file_uploader("🖼️ Upload 2D Image/Sketch (PNG/JPG) to Convert to 3D", type=["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"])
@@ -614,46 +607,17 @@ html_code = """
   }
   animateEngine();
 
-  // --- Load STL / STEP CAD File from Streamlit ---
-  const cadBase64 = "__CAD_BASE64_PLACEHOLDER__";
-  const cadTypeFormat = "__CAD_TYPE_PLACEHOLDER__";
-
-  if (cadBase64.length > 0) {
-    const binaryData = atob(cadBase64);
-    const bytes = new Uint8Array(binaryData.length);
-    for (let i = 0; i < binaryData.length; i++) {
-      bytes[i] = binaryData.charCodeAt(i);
+  // --- Load STL File from Streamlit ---
+  const stlBase64 = "__STL_BASE64_PLACEHOLDER__";
+  if (stlBase64.length > 0) {
+    const binaryStl = atob(stlBase64);
+    const bytes = new Uint8Array(binaryStl.length);
+    for (let i = 0; i < binaryStl.length; i++) {
+      bytes[i] = binaryStl.charCodeAt(i);
     }
 
-    let geometry;
-    if (cadTypeFormat === "stl") {
-      const loader = new THREE.STLLoader();
-      geometry = loader.parse(bytes.buffer);
-    } else {
-      const textDecoder = new TextDecoder();
-      const textContent = textDecoder.decode(bytes);
-      
-      const cartesianMatches = textContent.match(/CARTESIAN_POINT\s*\(\s*[^,]+\s*,\s*\(\s*([^)]+)\s*\)\s*\)/g);
-      const points = [];
-      if (cartesianMatches && cartesianMatches.length > 3) {
-        cartesianMatches.forEach(match => {
-          const coords = match.match(/\(([^)]+)\)/g);
-          if (coords && coords.length > 1) {
-            const nums = coords[1].replace(/[()]/g, '').split(',').map(n => parseFloat(n.trim()));
-            if (nums.length >= 3 && !isNaN(nums[0])) {
-              points.push(new THREE.Vector3(nums[0], nums[1], nums[2]));
-            }
-          }
-        });
-      }
-
-      if (points.length >= 4) {
-        geometry = new THREE.ConvexGeometry ? new THREE.ConvexGeometry(points) : new THREE.BoxGeometry(80, 80, 80);
-      } else {
-        geometry = new THREE.BoxGeometry(90, 70, 50);
-      }
-    }
-
+    const loader = new THREE.STLLoader();
+    const geometry = loader.parse(bytes.buffer);
     geometry.center();
     geometry.computeVertexNormals();
 
@@ -671,17 +635,17 @@ html_code = """
       side: THREE.DoubleSide
     });
 
-    const cadMesh = new THREE.Mesh(geometry, material);
-    cadMesh.scale.set(targetScale, targetScale, targetScale);
-    cadMesh.position.set(0, 0, 0);
+    const stlMesh = new THREE.Mesh(geometry, material);
+    stlMesh.scale.set(targetScale, targetScale, targetScale);
+    stlMesh.position.set(0, 0, 0);
 
-    attachAutoCADEdges(cadMesh);
+    attachAutoCADEdges(stlMesh);
 
-    scene.add(cadMesh);
-    objects3D.push(cadMesh);
+    scene.add(stlMesh);
+    objects3D.push(stlMesh);
 
     if (selectedObject) setHighlight(selectedObject, false);
-    selectedObject = cadMesh;
+    selectedObject = stlMesh;
     setHighlight(selectedObject, true);
     updateMeasurements(selectedObject);
   }
@@ -1290,7 +1254,6 @@ html_code = """
 </html>
 """
 
-html_code = html_code.replace("__CAD_BASE64_PLACEHOLDER__", cad_b64)
-html_code = html_code.replace("__CAD_TYPE_PLACEHOLDER__", cad_type)
+html_code = html_code.replace("__STL_BASE64_PLACEHOLDER__", stl_b64)
 html_code = html_code.replace("__IMG_BASE64_PLACEHOLDER__", img_b64)
 components.html(html_code, height=740, width=1300)
