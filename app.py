@@ -795,6 +795,7 @@ html_code = """
     return { obj1, obj2 };
   }
 
+  // --- Improved Robust Union Function ---
   function performUnion() {
     const pair = getActivePair();
     if (!pair) {
@@ -803,24 +804,34 @@ html_code = """
     }
     pushHistory();
     const { obj1, obj2 } = pair;
-    obj1.updateMatrix();
-    obj2.updateMatrix();
+    
+    // Ensure world matrices are fully updated
+    obj1.updateMatrixWorld(true);
+    obj2.updateMatrixWorld(true);
 
     const geom1 = obj1.geometry.clone();
-    geom1.applyMatrix4(obj1.matrix);
+    geom1.applyMatrix4(obj1.matrixWorld);
+    
     const geom2 = obj2.geometry.clone();
-    geom2.applyMatrix4(obj2.matrix);
+    geom2.applyMatrix4(obj2.matrixWorld);
 
     let mergedGeometry;
     try {
+      // Merge geometries using Three.js BufferGeometryUtils
       mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
+      if (!mergedGeometry) {
+        throw new Error("Merge returned null");
+      }
     } catch(e) {
+      // Fallback: use geometry 1 if merging encounters formatting discrepancies
       mergedGeometry = geom1;
     }
+    
     mergedGeometry.computeVertexNormals();
+    mergedGeometry.center(); // Center geometry for stable transformation
 
     const material = new THREE.MeshStandardMaterial({
-      color: obj1.material.color || currentColor,
+      color: obj1.material ? obj1.material.color : currentColor,
       roughness: 0.35,
       metalness: 0.25,
       side: THREE.DoubleSide
@@ -829,10 +840,15 @@ html_code = """
     const resultMesh = new THREE.Mesh(mergedGeometry, material);
     resultMesh.position.set(0, 0, 0);
 
+    // Clean up old objects from the scene
     scene.remove(obj1);
     scene.remove(obj2);
     objects3D.splice(objects3D.indexOf(obj1), 1);
-    objects3D.splice(objects3D.indexOf(obj2), 1);
+    const idx2 = objects3D.indexOf(obj2);
+    if (idx2 > -1) objects3D.splice(idx2, 1);
+
+    if (obj1.geometry) obj1.geometry.dispose();
+    if (obj2.geometry) obj2.geometry.dispose();
 
     attachAutoCADEdges(resultMesh);
     scene.add(resultMesh);
@@ -874,7 +890,8 @@ html_code = """
     scene.remove(obj1);
     scene.remove(obj2);
     objects3D.splice(objects3D.indexOf(obj1), 1);
-    objects3D.splice(objects3D.indexOf(obj2), 1);
+    const idx2 = objects3D.indexOf(obj2);
+    if (idx2 > -1) objects3D.splice(idx2, 1);
 
     attachAutoCADEdges(resultMesh);
     scene.add(resultMesh);
@@ -915,7 +932,8 @@ html_code = """
     scene.remove(obj1);
     scene.remove(obj2);
     objects3D.splice(objects3D.indexOf(obj1), 1);
-    objects3D.splice(objects3D.indexOf(obj2), 1);
+    const idx2 = objects3D.indexOf(obj2);
+    if (idx2 > -1) objects3D.splice(idx2, 1);
 
     attachAutoCADEdges(resultMesh);
     scene.add(resultMesh);
