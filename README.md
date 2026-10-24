@@ -2,7 +2,9 @@
 
 An edge-computed, gesture-controlled Augmented Reality (AR) CAD and 3D modeling web application built with **Python**, **Streamlit**, **MediaPipe**, **Three.js**, and **WebGL**. 
 
-Designed with an AutoCAD-style professional dark interface, this studio allows engineers and designers to interact with 3D space, manipulate primitives, import external `.stl` models, extrude 2D sketches, and perform robust CAD boolean operations using real-time hand tracking.
+Designed with an AutoCAD-style professional dark interface, this studio allows engineers and designers to interact with 3D space, manipulate primitives, import external `.stl` models, extrude 2D sketches, and perform robust CAD boolean operations using real-time hand tracking.  
+
+  App access link : https://ar-gesture-cad-studio-yovhcowlmh6mesydbs7wtj.streamlit.app/
 
 ---
 
