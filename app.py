@@ -788,158 +788,160 @@ html_code = """
     }
   }
 
+  /* ====================================================================================
+     Real solid Boolean engine (BSP-tree CSG, after Evan Wallace's csg.js, MIT licence).
+     Works on triangles in world space, so it handles any two meshes (primitives, STL, extruded sketches).
+     ==================================================================================== */
+  const CSG_EPS = 1e-3;
+  const V3 = {
+    sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }),
+    dot: (a, b) => a.x * b.x + a.y * b.y + a.z * b.z,
+    cross: (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
+    len: a => Math.sqrt(V3.dot(a, a)),
+    lerp: (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }),
+    neg: a => ({ x: -a.x, y: -a.y, z: -a.z })
+  };
+  function CsgPlane(normal, w) { this.normal = normal; this.w = w; }
+  CsgPlane.fromPoints = (a, b, c) => {
+    const n = V3.cross(V3.sub(b, a), V3.sub(c, a)), l = V3.len(n);
+    if (l < 1e-12) return null;                                   // degenerate triangle
+    const u = { x: n.x / l, y: n.y / l, z: n.z / l };
+    return new CsgPlane(u, V3.dot(u, a));
+  };
+  CsgPlane.prototype.flip = function () { this.normal = V3.neg(this.normal); this.w = -this.w; };
+  CsgPlane.prototype.splitPolygon = function (poly, coplanarFront, coplanarBack, front, back) {
+    const COPLANAR = 0, FRONT = 1, BACK = 2, SPANNING = 3; let polyType = 0; const types = [];
+    for (const v of poly.vertices) {
+      const t = V3.dot(this.normal, v) - this.w, type = t < -CSG_EPS ? BACK : t > CSG_EPS ? FRONT : COPLANAR;
+      polyType |= type; types.push(type);
+    }
+    if (polyType === COPLANAR) (V3.dot(this.normal, poly.plane.normal) > 0 ? coplanarFront : coplanarBack).push(poly);
+    else if (polyType === FRONT) front.push(poly);
+    else if (polyType === BACK) back.push(poly);
+    else {
+      const f = [], b = [];
+      for (let i = 0; i < poly.vertices.length; i++) {
+        const j = (i + 1) % poly.vertices.length, ti = types[i], tj = types[j], vi = poly.vertices[i], vj = poly.vertices[j];
+        if (ti !== BACK) f.push(vi);
+        if (ti !== FRONT) b.push(vi);
+        if ((ti | tj) === SPANNING) {
+          const t = (this.w - V3.dot(this.normal, vi)) / V3.dot(this.normal, V3.sub(vj, vi)), v = V3.lerp(vi, vj, t);
+          f.push(v); b.push(v);
+        }
+      }
+      if (f.length >= 3) front.push(new CsgPoly(f, poly.plane));
+      if (b.length >= 3) back.push(new CsgPoly(b, poly.plane));
+    }
+  };
+  function CsgPoly(vertices, plane) { this.vertices = vertices; this.plane = plane; }
+  CsgPoly.prototype.flip = function () { this.vertices.reverse(); this.plane = new CsgPlane(this.plane.normal, this.plane.w); this.plane.flip(); };
+  function CsgNode(polys) { this.plane = null; this.front = null; this.back = null; this.polygons = []; if (polys && polys.length) this.build(polys); }
+  CsgNode.prototype.invert = function () {
+    const stack = [this];
+    while (stack.length) {
+      const n = stack.pop();
+      n.polygons.forEach(p => p.flip());
+      if (n.plane) { n.plane = new CsgPlane(n.plane.normal, n.plane.w); n.plane.flip(); }
+      const t = n.front; n.front = n.back; n.back = t;
+      if (n.front) stack.push(n.front); if (n.back) stack.push(n.back);
+    }
+  };
+  CsgNode.prototype.clipPolygons = function (polys) {
+    if (!this.plane) return polys.slice();
+    let front = [], back = [];
+    for (const p of polys) this.plane.splitPolygon(p, front, back, front, back);
+    front = this.front ? this.front.clipPolygons(front) : front;
+    back = this.back ? this.back.clipPolygons(back) : [];
+    return front.concat(back);
+  };
+  CsgNode.prototype.clipTo = function (bsp) {
+    const stack = [this];
+    while (stack.length) { const n = stack.pop(); n.polygons = bsp.clipPolygons(n.polygons); if (n.front) stack.push(n.front); if (n.back) stack.push(n.back); }
+  };
+  CsgNode.prototype.allPolygons = function () {
+    let out = []; const stack = [this];
+    while (stack.length) { const n = stack.pop(); out = out.concat(n.polygons); if (n.front) stack.push(n.front); if (n.back) stack.push(n.back); }
+    return out;
+  };
+  CsgNode.prototype.build = function (polys) {
+    const stack = [[this, polys]];
+    while (stack.length) {
+      const [node, list] = stack.pop(); if (!list.length) continue;
+      if (!node.plane) node.plane = list[Math.floor(list.length / 2)].plane;      // middle polygon -> better balanced tree
+      const front = [], back = [];
+      for (const p of list) node.plane.splitPolygon(p, node.polygons, node.polygons, front, back);
+      if (front.length) { if (!node.front) node.front = new CsgNode(); stack.push([node.front, front]); }
+      if (back.length) { if (!node.back) node.back = new CsgNode(); stack.push([node.back, back]); }
+    }
+  };
+  /* THREE.Mesh -> world-space triangle polygons */
+  function meshToPolys(mesh) {
+    mesh.updateMatrixWorld(true);
+    let g = mesh.geometry; if (g.index) g = g.toNonIndexed();
+    const pos = g.attributes.position, m = mesh.matrixWorld, polys = [], e = m.elements;
+    const P = i => { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i); return { x: e[0] * x + e[4] * y + e[8] * z + e[12], y: e[1] * x + e[5] * y + e[9] * z + e[13], z: e[2] * x + e[6] * y + e[10] * z + e[14] }; };
+    for (let i = 0; i + 2 < pos.count; i += 3) {
+      const a = P(i), b = P(i + 1), c = P(i + 2), pl = CsgPlane.fromPoints(a, b, c);
+      if (pl) polys.push(new CsgPoly([a, b, c], pl));
+    }
+    if (m.determinant() < 0) polys.forEach(p => p.flip());           // mirrored scale flips the winding
+    return polys;
+  }
+  /* polygons -> centred THREE.BufferGeometry (+ the centre, so the mesh can sit where the solid is) */
+  function polysToGeometry(polys) {
+    const arr = [];
+    for (const p of polys) for (let i = 1; i < p.vertices.length - 1; i++) for (const v of [p.vertices[0], p.vertices[i], p.vertices[i + 1]]) arr.push(v.x, v.y, v.z);
+    if (!arr.length) return null;
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+    g.computeBoundingBox(); const c = new THREE.Vector3(); g.boundingBox.getCenter(c); g.translate(-c.x, -c.y, -c.z); g.computeVertexNormals();
+    return { geometry: g, center: c };
+  }
+  function csgCompute(op, meshA, meshB) {
+    const A = new CsgNode(meshToPolys(meshA)), B = new CsgNode(meshToPolys(meshB));
+    if (op === 'union') { A.clipTo(B); B.clipTo(A); B.invert(); B.clipTo(A); B.invert(); A.build(B.allPolygons()); return A.allPolygons(); }
+    if (op === 'subtract') { A.invert(); A.clipTo(B); B.clipTo(A); B.invert(); B.clipTo(A); B.invert(); A.build(B.allPolygons()); A.invert(); return A.allPolygons(); }
+    A.invert(); B.clipTo(A); B.invert(); A.clipTo(B); B.clipTo(A); A.build(B.allPolygons()); A.invert(); return A.allPolygons();   // intersect
+  }
+  /* choose the two solids: the selected one (A) and the nearest other solid that overlaps it (B) */
   function getActivePair() {
     if (objects3D.length < 2) return null;
     let obj1 = selectedObject;
-    if (!obj1 || !objects3D.includes(obj1)) {
-      obj1 = objects3D[objects3D.length - 2];
+    if (!obj1 || !objects3D.includes(obj1)) obj1 = objects3D[objects3D.length - 1];
+    const b1 = new THREE.Box3().setFromObject(obj1), c1 = b1.getCenter(new THREE.Vector3());
+    let obj2 = null, bestD = Infinity;
+    for (const o of objects3D) {
+      if (o === obj1) continue;
+      const b2 = new THREE.Box3().setFromObject(o), d = b2.getCenter(new THREE.Vector3()).distanceTo(c1) - (b1.intersectsBox(b2) ? 1e6 : 0);   // overlapping solids first
+      if (d < bestD) { bestD = d; obj2 = o; }
     }
-    const obj2 = objects3D.find(o => o !== obj1);
-    return { obj1, obj2 };
+    return obj2 ? { obj1, obj2 } : null;
   }
-
-  function performUnion() {
+  function booleanOp(op) {
+    const label = { union: 'Union', intersect: 'Intersect', subtract: 'Subtract' }[op];
     const pair = getActivePair();
-    if (!pair) {
-      statusBarText.innerText = "Need at least 2 objects for Union";
-      return;
-    }
-    pushHistory();
+    if (!pair) { statusBarText.innerText = `Need at least 2 objects for ${label}`; return; }
     const { obj1, obj2 } = pair;
-    
-    obj1.updateMatrixWorld(true);
-    obj2.updateMatrixWorld(true);
-
-    const geom1 = obj1.geometry.clone();
-    geom1.applyMatrix4(obj1.matrixWorld);
-    
-    const geom2 = obj2.geometry.clone();
-    geom2.applyMatrix4(obj2.matrixWorld);
-
-    let mergedGeometry;
-    try {
-      mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([geom1, geom2], false);
-      if (!mergedGeometry) throw new Error("Merge null");
-    } catch(e) {
-      mergedGeometry = geom1;
-    }
-    
-    mergedGeometry.computeVertexNormals();
-    mergedGeometry.center();
-
-    const material = new THREE.MeshStandardMaterial({
-      color: obj1.material ? obj1.material.color : currentColor,
-      roughness: 0.35,
-      metalness: 0.25,
-      side: THREE.DoubleSide
-    });
-
-    const resultMesh = new THREE.Mesh(mergedGeometry, material);
-    resultMesh.position.set(0, 0, 0);
-
-    scene.remove(obj1);
-    scene.remove(obj2);
-    objects3D.splice(objects3D.indexOf(obj1), 1);
-    const idx2 = objects3D.indexOf(obj2);
-    if (idx2 > -1) objects3D.splice(idx2, 1);
-
-    if (obj1.geometry) obj1.geometry.dispose();
-    if (obj2.geometry) obj2.geometry.dispose();
-
+    const nTri = (obj1.geometry.index ? obj1.geometry.index.count : obj1.geometry.attributes.position.count) / 3 + (obj2.geometry.index ? obj2.geometry.index.count : obj2.geometry.attributes.position.count) / 3;
+    if (nTri > 40000) { statusBarText.innerText = `Models too detailed for ${label} in the browser (${Math.round(nTri)} triangles)`; return; }
+    let polys;
+    try { polys = csgCompute(op, obj1, obj2); } catch (e) { console.error(e); statusBarText.innerText = `${label} failed (try simpler shapes)`; return; }
+    const res = polysToGeometry(polys);
+    if (!res) { statusBarText.innerText = op === 'intersect' ? 'Intersect: the two objects do not overlap' : `${label}: nothing left, objects unchanged`; return; }
+    pushHistory();
+    const material = new THREE.MeshStandardMaterial({ color: obj1.material ? obj1.material.color.clone() : new THREE.Color(currentColor), roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide });
+    const resultMesh = new THREE.Mesh(res.geometry, material);
+    resultMesh.position.copy(res.center);
+    [obj1, obj2].forEach(o => { scene.remove(o); const i = objects3D.indexOf(o); if (i > -1) objects3D.splice(i, 1); if (o.geometry) o.geometry.dispose(); });
     attachAutoCADEdges(resultMesh);
-    scene.add(resultMesh);
-    objects3D.push(resultMesh);
-
-    selectedObject = resultMesh;
-    setHighlight(selectedObject, true);
-    statusBarText.innerText = "Boolean Union Successful";
+    scene.add(resultMesh); objects3D.push(resultMesh);
+    if (selectedObject) setHighlight(selectedObject, false);
+    selectedObject = resultMesh; setHighlight(selectedObject, true);
+    statusBarText.innerText = `Boolean ${label} Successful`;
     updateMeasurements(selectedObject);
   }
-
-  function performIntersect() {
-    const pair = getActivePair();
-    if (!pair) {
-      statusBarText.innerText = "Need at least 2 objects for Intersect";
-      return;
-    }
-    pushHistory();
-    const { obj1, obj2 } = pair;
-    
-    const interGeometry = obj1.geometry.clone();
-    interGeometry.scale(0.7, 0.7, 0.7);
-    interGeometry.computeVertexNormals();
-
-    const material = new THREE.MeshStandardMaterial({
-      color: obj1.material.color || currentColor,
-      roughness: 0.35,
-      metalness: 0.25,
-      side: THREE.DoubleSide
-    });
-
-    const resultMesh = new THREE.Mesh(interGeometry, material);
-    const box1 = new THREE.Box3().setFromObject(obj1);
-    const box2 = new THREE.Box3().setFromObject(obj2);
-    const center = new THREE.Vector3();
-    box1.intersect(box2).getCenter(center);
-    resultMesh.position.copy(center);
-
-    scene.remove(obj1);
-    scene.remove(obj2);
-    objects3D.splice(objects3D.indexOf(obj1), 1);
-    const idx2 = objects3D.indexOf(obj2);
-    if (idx2 > -1) objects3D.splice(idx2, 1);
-
-    attachAutoCADEdges(resultMesh);
-    scene.add(resultMesh);
-    objects3D.push(resultMesh);
-
-    selectedObject = resultMesh;
-    setHighlight(selectedObject, true);
-    statusBarText.innerText = "Boolean Intersect Successful";
-    updateMeasurements(selectedObject);
-  }
-
-  function performSubtract() {
-    const pair = getActivePair();
-    if (!pair) {
-      statusBarText.innerText = "Need at least 2 objects for Subtract";
-      return;
-    }
-    pushHistory();
-    const { obj1, obj2 } = pair;
-
-    const subGeometry = obj1.geometry.clone();
-    subGeometry.scale(0.85, 0.85, 0.85);
-    subGeometry.computeVertexNormals();
-
-    const material = new THREE.MeshStandardMaterial({
-      color: obj1.material.color || currentColor,
-      roughness: 0.35,
-      metalness: 0.25,
-      side: THREE.DoubleSide
-    });
-
-    const resultMesh = new THREE.Mesh(subGeometry, material);
-    const box1 = new THREE.Box3().setFromObject(obj1);
-    const center1 = new THREE.Vector3();
-    box1.getCenter(center1);
-    resultMesh.position.copy(center1);
-
-    scene.remove(obj1);
-    scene.remove(obj2);
-    objects3D.splice(objects3D.indexOf(obj1), 1);
-    const idx2 = objects3D.indexOf(obj2);
-    if (idx2 > -1) objects3D.splice(idx2, 1);
-
-    attachAutoCADEdges(resultMesh);
-    scene.add(resultMesh);
-    objects3D.push(resultMesh);
-
-    selectedObject = resultMesh;
-    setHighlight(selectedObject, true);
-    statusBarText.innerText = "Boolean Subtract Successful";
-    updateMeasurements(selectedObject);
-  }
+  function performUnion() { booleanOp('union'); }
+  function performIntersect() { booleanOp('intersect'); }
+  function performSubtract() { booleanOp('subtract'); }
 
   function clearCanvas() {
     if (activeMode === '3D') {
