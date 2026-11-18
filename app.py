@@ -266,6 +266,43 @@ html_code = """
       font-weight: 600;
       color: #9ca3af;
     }
+    #ui-panel { max-height: 610px; overflow-y: auto; scrollbar-width: thin; }
+    #hud-canvas { position: absolute; top: 0; left: 0; width: 1280px; height: 720px; z-index: 3; pointer-events: none; }
+    #props {
+      position: absolute; top: 20px; right: 20px; z-index: 10; width: 250px;
+      background: rgba(17, 24, 39, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12); padding: 14px; border-radius: 12px; display: none;
+      flex-direction: column; gap: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); font-size: 12px;
+    }
+    #props .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    #props .val { color: #f8fafc; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #props .dims { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    #props .dims label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: #94a3b8; font-weight: 700; }
+    #props input[type=number], #props select, #sec-pos {
+      width: 100%; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 4px 6px; font-size: 12px;
+    }
+    #props .hint { color: #64748b; font-size: 10px; line-height: 1.3; }
+    #sec-pos { padding: 0; accent-color: #facc15; }
+    #sec-readout { font-size: 10px; color: #94a3b8; }
+    #btn-guide { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10; padding: 8px 16px; border-radius: 20px; background: rgba(17, 24, 39, 0.9); color: #facc15; border-color: rgba(250, 204, 21, 0.5); }
+    #guide {
+      position: absolute; inset: 0; z-index: 50; background: rgba(3, 7, 18, 0.88); display: none; align-items: center; justify-content: center;
+    }
+    #guide .box { width: 1040px; max-height: 690px; overflow-y: auto; background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 20px 24px; }
+    #guide h2 { margin: 0 0 4px; font-size: 20px; color: #f8fafc; }
+    #guide .sub { color: #94a3b8; font-size: 12px; margin-bottom: 14px; }
+    #guide .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    #guide .gc { background: #0b1220; border: 1px solid #1f2937; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; transition: all .25s; }
+    #guide .gc.done { border-color: #10b981; box-shadow: 0 0 14px rgba(16, 185, 129, .35); }
+    #guide .gc.star { border-color: #facc15; }
+    #guide .gc svg { width: 100%; height: 86px; background: #020617; border-radius: 8px; }
+    #guide .gc b { color: #f8fafc; font-size: 13px; }
+    #guide .gc span { color: #94a3b8; font-size: 11px; line-height: 1.35; }
+    #guide .gc .tick { color: #475569; font-size: 11px; font-weight: 700; }
+    #guide .gc.done .tick { color: #10b981; }
+    #guide .tips { margin: 14px 0 0; padding: 10px 12px; background: #0b1220; border-radius: 10px; color: #cbd5e1; font-size: 12px; line-height: 1.5; }
+    #guide .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: #94a3b8; font-size: 12px; }
+    #guide .foot button { background: #0284c7; color: #fff; border-color: #38bdf8; padding: 9px 22px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -348,11 +385,86 @@ html_code = """
     </div>
 
     <div class="ui-group">
+      <span class="ui-label">Project & Export</span>
+      <div class="btn-grid">
+        <button id="btn-save" onclick="saveProject()">Save project</button>
+        <button id="btn-load" onclick="document.getElementById('file-load').click()">Load project</button>
+      </div>
+      <button id="btn-stl" onclick="exportSTL()">Export STL (mm)</button>
+      <input type="file" id="file-load" accept=".json,application/json" style="display:none">
+    </div>
+
+    <div class="ui-group" id="group-section">
+      <span class="ui-label">Section View (cut)</span>
+      <button id="btn-section" onclick="toggleSection()">Section: Off</button>
+      <div class="btn-grid-3">
+        <button id="sec-x" class="active" onclick="setSectionAxis('x')">X</button>
+        <button id="sec-y" onclick="setSectionAxis('y')">Y</button>
+        <button id="sec-z" onclick="setSectionAxis('z')">Z</button>
+      </div>
+      <input type="range" id="sec-pos" min="-150" max="150" value="0" step="1" oninput="setSectionPos(this.value)">
+      <div class="btn-grid">
+        <button id="btn-secflip" onclick="flipSection()">Flip side</button>
+        <span id="sec-readout">Cut at 0 mm</span>
+      </div>
+    </div>
+
+    <div class="ui-group">
       <span class="ui-label">Controls</span>
       <div class="btn-grid">
         <button id="btn-undo" onclick="performUndo()">Undo (1 Step)</button>
         <button id="btn-clear" onclick="clearCanvas()">Clear All</button>
       </div>
+    </div>
+  </div>
+
+  <canvas id="hud-canvas" width="1280" height="720"></canvas>
+
+  <div id="props">
+    <span class="ui-label">Selected object</span>
+    <div class="row"><span>Type</span><span class="val" id="p-kind">-</span></div>
+    <div class="dims">
+      <label>W (X) mm<input type="number" id="dim-x" min="1" step="1"></label>
+      <label>H (Y) mm<input type="number" id="dim-y" min="1" step="1"></label>
+      <label>D (Z) mm<input type="number" id="dim-z" min="1" step="1"></label>
+    </div>
+    <div class="row"><span>Material</span><select id="p-mat" style="width:120px"></select></div>
+    <div class="row"><span>Volume</span><span class="val" id="p-vol">-</span></div>
+    <div class="row"><span>Surface area</span><span class="val" id="p-area">-</span></div>
+    <div class="row"><span>Mass</span><span class="val" id="p-mass">-</span></div>
+    <div class="hint">Type new W / H / D in mm and press Enter. Volume and mass are for closed solids (approximate for imported STL).</div>
+  </div>
+
+  <button id="btn-guide" onclick="showGuide(true)">? Gesture guide</button>
+
+  <div id="guide">
+    <div class="box">
+      <h2>Hand gesture guide</h2>
+      <div class="sub">Stand 40-70 cm from the camera, keep good light on your hands and show your palm. Each card turns green when the app sees you do it.</div>
+      <div class="cards">
+        <div class="gc" id="g-point">
+          <svg viewBox="0 0 120 80"><circle cx="60" cy="40" r="6" fill="#38bdf8"><animate attributeName="cx" values="30;90;30" dur="3s" repeatCount="indefinite"/><animate attributeName="cy" values="55;25;55" dur="3s" repeatCount="indefinite"/></circle><circle cx="60" cy="40" r="12" fill="none" stroke="#38bdf8" opacity=".4"><animate attributeName="cx" values="30;90;30" dur="3s" repeatCount="indefinite"/><animate attributeName="cy" values="55;25;55" dur="3s" repeatCount="indefinite"/></circle></svg>
+          <b>1. Point</b><span>Hold up one hand. Your index fingertip is the blue cursor.</span><div class="tick" id="t-point">Not seen yet</div>
+        </div>
+        <div class="gc" id="g-pinch">
+          <svg viewBox="0 0 120 80"><circle r="7" cy="40" fill="#f8fafc"><animate attributeName="cx" values="42;56;42" dur="1.6s" repeatCount="indefinite"/></circle><circle r="7" cy="40" fill="#38bdf8"><animate attributeName="cx" values="78;64;78" dur="1.6s" repeatCount="indefinite"/></circle><text x="60" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">thumb + index touch</text></svg>
+          <b>2. Pinch</b><span>Touch thumb and index tip together (distance under 45 px, shown bottom right). Pinch = select, draw or grab. Release = finish.</span><div class="tick" id="t-pinch">Not seen yet</div>
+        </div>
+        <div class="gc" id="g-drag">
+          <svg viewBox="0 0 120 80"><rect x="22" y="25" width="26" height="26" fill="#38bdf8" opacity=".85"><animate attributeName="x" values="22;70;22" dur="2.6s" repeatCount="indefinite"/></rect><circle r="6" cy="38" fill="#10b981"><animate attributeName="cx" values="35;83;35" dur="2.6s" repeatCount="indefinite"/></circle></svg>
+          <b>3. Pinch and drag</b><span>Choose Move, Resize, Rot X/Y/Z or Extrude, pinch the object and move your hand.</span><div class="tick" id="t-drag">Not seen yet</div>
+        </div>
+        <div class="gc star" id="g-scale">
+          <svg viewBox="0 0 120 80"><rect x="45" y="25" width="30" height="30" fill="#38bdf8" opacity=".85"><animate attributeName="x" values="45;30;45" dur="2.4s" repeatCount="indefinite"/><animate attributeName="y" values="25;10;25" dur="2.4s" repeatCount="indefinite"/><animate attributeName="width" values="30;60;30" dur="2.4s" repeatCount="indefinite"/><animate attributeName="height" values="30;60;30" dur="2.4s" repeatCount="indefinite"/></rect><circle r="6" cy="40" fill="#10b981"><animate attributeName="cx" values="35;12;35" dur="2.4s" repeatCount="indefinite"/></circle><circle r="6" cy="40" fill="#10b981"><animate attributeName="cx" values="85;108;85" dur="2.4s" repeatCount="indefinite"/></circle></svg>
+          <b>4. Two hands: scale</b><span>Pinch the object with BOTH hands (one pinch each). Move the hands apart to enlarge, together to shrink.</span><div class="tick" id="t-scale">Not seen yet</div>
+        </div>
+        <div class="gc star" id="g-rotate">
+          <svg viewBox="0 0 120 80"><g><animateTransform attributeName="transform" type="rotate" values="-30 60 40;30 60 40;-30 60 40" dur="3s" repeatCount="indefinite"/><rect x="45" y="25" width="30" height="30" fill="#38bdf8" opacity=".85"/><line x1="18" y1="40" x2="102" y2="40" stroke="#10b981" stroke-width="2"/><circle cx="18" cy="40" r="6" fill="#10b981"/><circle cx="102" cy="40" r="6" fill="#10b981"/></g></svg>
+          <b>5. Two hands: rotate</b><span>Pinch with both hands, then twist them like turning a steering wheel. The object turns with the line between your hands.</span><div class="tick" id="t-rotate">Not seen yet</div>
+        </div>
+      </div>
+      <div class="tips"><b>Two-hand steps:</b> (1) Create or choose a shape. (2) Pinch it once with one hand so it is selected (it turns orange). (3) Pinch with both hands at the same time, a yellow line appears between them. (4) Spread or squeeze to scale, twist to rotate. (5) Release both hands to finish. After two-hand use the app ignores single pinches for a moment, so shapes are not created by accident.<br><b>No webcam?</b> You can still click the buttons, use Section view, type exact sizes and export.</div>
+      <div class="foot"><label><input type="checkbox" id="guide-hide"> Do not show this automatically</label><button onclick="showGuide(false)">Start designing</button></div>
     </div>
   </div>
 
@@ -374,6 +486,7 @@ html_code = """
   const statusDot = document.getElementById('status-dot');
   const pinchIndicator = document.getElementById('pinch-indicator');
 
+  var featuresReady = false;   // set true once the engineering tools below are initialised
   let activeMode = '3D';
   let currentTool = 'cube';
   let currentColor = '#38bdf8';
@@ -450,7 +563,8 @@ html_code = """
       position: obj.position.clone(),
       rotation: obj.rotation.clone(),
       scale: obj.scale.clone(),
-      color: obj.material.color.getHexString()
+      color: obj.material.color.getHexString(),
+      kind: obj.userData.kind, mat: obj.userData.mat
     }));
     historyStack.push(stateSnapshot);
     if (historyStack.length > 25) historyStack.shift();
@@ -484,6 +598,7 @@ html_code = """
       mesh.position.copy(data.position);
       mesh.rotation.copy(data.rotation);
       mesh.scale.copy(data.scale);
+      mesh.userData.kind = data.kind; mesh.userData.mat = data.mat;
       attachAutoCADEdges(mesh);
       scene.add(mesh);
       objects3D.push(mesh);
@@ -587,6 +702,7 @@ html_code = """
     }
 
     cursorMesh.visible = (activeMode === '3D');
+    if (featuresReady) { applyClipping(); const t = performance.now(); if (t - lastPropsT > 200) { lastPropsT = t; updateProps(); } cutHelper.visible = sectionOn && activeMode === '3D'; }
 
     renderer.render(scene, camera);
 
@@ -639,6 +755,7 @@ html_code = """
     });
 
     const stlMesh = new THREE.Mesh(geometry, material);
+    stlMesh.userData.kind = 'STL import'; stlMesh.userData.mat = 'Steel';
     stlMesh.scale.set(targetScale, targetScale, targetScale);
     stlMesh.position.set(0, 0, 0);
 
@@ -718,6 +835,7 @@ html_code = """
       });
 
       const imgMesh = new THREE.Mesh(geometry, material);
+      imgMesh.userData.kind = 'Sketch solid'; imgMesh.userData.mat = 'Steel';
       imgMesh.position.set(0, 0, 0);
 
       attachAutoCADEdges(imgMesh);
@@ -930,6 +1048,7 @@ html_code = """
     pushHistory();
     const material = new THREE.MeshStandardMaterial({ color: obj1.material ? obj1.material.color.clone() : new THREE.Color(currentColor), roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide });
     const resultMesh = new THREE.Mesh(res.geometry, material);
+    resultMesh.userData.kind = 'Boolean ' + label.toLowerCase(); resultMesh.userData.mat = obj1.userData.mat || 'Steel';
     resultMesh.position.copy(res.center);
     [obj1, obj2].forEach(o => { scene.remove(o); const i = objects3D.indexOf(o); if (i > -1) objects3D.splice(i, 1); if (o.geometry) o.geometry.dispose(); });
     attachAutoCADEdges(resultMesh);
@@ -1074,6 +1193,7 @@ html_code = """
     });
 
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.userData.kind = type.charAt(0).toUpperCase() + type.slice(1); mesh.userData.mat = 'Steel';
     mesh.position.copy(pos);
     attachAutoCADEdges(mesh);
     return mesh;
@@ -1152,88 +1272,271 @@ html_code = """
     }
   }
 
+  /* ====================================================================================
+     Engineering tools: properties (exact size / volume / mass), section view, project save/load, STL export
+     1 scene unit = 1.5 mm (same scale as the existing Measure tool).
+     ==================================================================================== */
+  const MM = 1.5;
+  const MATERIALS = { 'Steel': 7.85, 'Aluminium': 2.70, 'Cast iron': 7.20, 'Titanium': 4.51, 'Copper': 8.96, 'ABS plastic': 1.05 };
+  const hudCanvas = document.getElementById('hud-canvas'), hudCtx = hudCanvas.getContext('2d');
+  renderer.localClippingEnabled = true;
+
+  /* ---- guide ---- */
+  const guideState = { point: false, pinch: false, drag: false, scale: false, rotate: false };
+  function markGuide(k) {
+    if (guideState[k]) return;
+    guideState[k] = true;
+    const card = document.getElementById('g-' + k), tick = document.getElementById('t-' + k);
+    if (card) card.classList.add('done');
+    if (tick) tick.innerText = 'Detected';
+  }
+  function showGuide(show) {
+    document.getElementById('guide').style.display = show ? 'flex' : 'none';
+    if (!show) { try { if (document.getElementById('guide-hide').checked) localStorage.setItem('cadGuideSeen', '1'); } catch (e) { } }
+  }
+  try { if (!localStorage.getItem('cadGuideSeen')) setTimeout(() => showGuide(true), 600); } catch (e) { setTimeout(() => showGuide(true), 600); }
+
+  /* ---- solid properties ---- */
+  function solidStats(mesh) {
+    mesh.updateMatrixWorld(true);
+    const g = mesh.geometry, pos = g.attributes.position, idx = g.index, e = mesh.matrixWorld.elements, n = idx ? idx.count : pos.count;
+    const P = i => { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i); return [e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]]; };
+    let vol = 0, area = 0;
+    for (let i = 0; i + 2 < n; i += 3) {
+      const a = P(idx ? idx.getX(i) : i), b = P(idx ? idx.getX(i + 1) : i + 1), c = P(idx ? idx.getX(i + 2) : i + 2);
+      vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      area += 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+    }
+    return { vol: Math.abs(vol) * MM * MM * MM, area: area * MM * MM };      // mm3, mm2
+  }
+  const matSel = document.getElementById('p-mat');
+  Object.keys(MATERIALS).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k + ' (' + MATERIALS[k] + ' g/cm3)'; matSel.appendChild(o); });
+  matSel.onchange = () => { if (selectedObject) { selectedObject.userData.mat = matSel.value; lastPropsKey = ''; updateProps(); } };
+  ['x', 'y', 'z'].forEach(ax => {
+    const el = document.getElementById('dim-' + ax);
+    el.onchange = () => {
+      const mm = parseFloat(el.value);
+      if (!selectedObject || !(mm > 0)) return;
+      const g = selectedObject.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      const s = new THREE.Vector3(); g.boundingBox.getSize(s);
+      if (s[ax] * MM > 1e-6) { pushHistory(); selectedObject.scale[ax] = mm / (s[ax] * MM); }
+      lastPropsKey = ''; updateProps(); updateMeasurements(selectedObject);
+    };
+  });
+  let lastPropsKey = '', lastStats = null, lastPropsT = 0;
+  function fmtMass(g) { return g >= 1000 ? (g / 1000).toFixed(3) + ' kg' : g.toFixed(1) + ' g'; }
+  function updateProps() {
+    const card = document.getElementById('props');
+    if (!selectedObject || activeMode !== '3D' || !objects3D.includes(selectedObject)) { card.style.display = 'none'; return; }
+    card.style.display = 'flex';
+    const o = selectedObject, g = o.geometry; if (!g.boundingBox) g.computeBoundingBox();
+    const key = o.uuid + o.scale.toArray().map(v => v.toFixed(3)).join(',') + (o.userData.mat || 'Steel') + g.uuid;
+    if (key !== lastPropsKey) { lastPropsKey = key; lastStats = solidStats(o); }
+    const s = new THREE.Vector3(); g.boundingBox.getSize(s);
+    ['x', 'y', 'z'].forEach(ax => { const el = document.getElementById('dim-' + ax); if (document.activeElement !== el) el.value = (s[ax] * o.scale[ax] * MM).toFixed(1); });
+    const mat = o.userData.mat || 'Steel'; if (matSel.value !== mat && document.activeElement !== matSel) matSel.value = mat;
+    document.getElementById('p-kind').innerText = o.userData.kind || 'Object';
+    document.getElementById('p-vol').innerText = (lastStats.vol / 1000).toFixed(2) + ' cm3';
+    document.getElementById('p-area').innerText = (lastStats.area / 100).toFixed(1) + ' cm2';
+    document.getElementById('p-mass').innerText = fmtMass(lastStats.vol / 1000 * MATERIALS[mat]);
+  }
+
+  /* ---- section view ---- */
+  let sectionOn = false, sectionAxis = 'x', sectionFlipped = false, sectionPos = 0;
+  const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+  const cutHelper = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+  cutHelper.visible = false; scene.add(cutHelper);
+  function refreshSection() {
+    const n = new THREE.Vector3(); n[sectionAxis] = 1; const s = sectionFlipped ? -1 : 1;
+    clipPlane.normal.copy(n).multiplyScalar(s); clipPlane.constant = -sectionPos * s;   // keeps the side where n.p + c >= 0
+    cutHelper.position.set(0, 0, 0); cutHelper.position[sectionAxis] = sectionPos;
+    cutHelper.rotation.set(0, sectionAxis === 'x' ? Math.PI / 2 : 0, 0); if (sectionAxis === 'y') cutHelper.rotation.x = Math.PI / 2;
+    cutHelper.visible = sectionOn && activeMode === '3D';
+    document.getElementById('btn-section').innerText = 'Section: ' + (sectionOn ? 'On' : 'Off');
+    document.getElementById('btn-section').classList.toggle('active', sectionOn);
+    document.getElementById('sec-readout').innerText = 'Cut ' + sectionAxis.toUpperCase() + ' = ' + Math.round(sectionPos * MM) + ' mm' + (sectionFlipped ? ' (flipped)' : '');
+  }
+  function toggleSection() { sectionOn = !sectionOn; refreshSection(); }
+  function setSectionAxis(a) { sectionAxis = a; ['x', 'y', 'z'].forEach(k => document.getElementById('sec-' + k).classList.toggle('active', k === a)); refreshSection(); }
+  function setSectionPos(v) { sectionPos = parseFloat(v); if (!sectionOn) sectionOn = true; refreshSection(); }
+  function flipSection() { sectionFlipped = !sectionFlipped; refreshSection(); }
+  function applyClipping() {
+    const want = sectionOn && activeMode === '3D';
+    objects3D.forEach(o => {
+      if (o.userData.clipOn === want) return;
+      o.userData.clipOn = want;
+      const mats = [o.material]; const el = o.getObjectByName('cadEdgeLines'); if (el) mats.push(el.material);
+      mats.forEach(m => { m.clippingPlanes = want ? [clipPlane] : null; m.clipShadows = true; m.needsUpdate = true; });
+    });
+  }
+  refreshSection();
+
+  /* ---- save / load project ---- */
+  function downloadBlob(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  function f32ToB64(arr) {
+    const u8 = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength); let s = ''; const CH = 0x8000;
+    for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+    return btoa(s);
+  }
+  function b64ToF32(b64) { const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); }
+  function saveProject() {
+    if (!objects3D.length) { statusBarText.innerText = 'Nothing to save yet'; return; }
+    const data = {
+      app: 'ARGestureCAD', version: 1,
+      objects: objects3D.map(o => {
+        let g = o.geometry; if (g.index) g = g.toNonIndexed();
+        return { kind: o.userData.kind || 'Object', mat: o.userData.mat || 'Steel', color: '#' + o.material.color.getHexString(),
+          pos: o.position.toArray(), rot: [o.rotation.x, o.rotation.y, o.rotation.z], scale: o.scale.toArray(), geom: f32ToB64(new Float32Array(g.attributes.position.array)) };
+      })
+    };
+    downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'cad_project.json');
+    statusBarText.innerText = 'Project saved (' + objects3D.length + ' objects)';
+  }
+  function loadProject(file) {
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const data = JSON.parse(rd.result);
+        if (data.app !== 'ARGestureCAD' || !Array.isArray(data.objects)) throw new Error('not a project file');
+        pushHistory();
+        objects3D.forEach(o => { scene.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        objects3D.length = 0; selectedObject = null;
+        data.objects.forEach(d => {
+          const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(b64ToF32(d.geom), 3)); g.computeVertexNormals();
+          const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide }));
+          m.position.fromArray(d.pos); m.rotation.set(d.rot[0], d.rot[1], d.rot[2]); m.scale.fromArray(d.scale);
+          m.userData.kind = d.kind; m.userData.mat = MATERIALS[d.mat] ? d.mat : 'Steel';
+          attachAutoCADEdges(m); scene.add(m); objects3D.push(m);
+        });
+        if (objects3D.length) { selectedObject = objects3D[objects3D.length - 1]; setHighlight(selectedObject, true); updateMeasurements(selectedObject); }
+        statusBarText.innerText = 'Project loaded (' + objects3D.length + ' objects)';
+      } catch (err) { console.error(err); statusBarText.innerText = 'Could not load: not a valid project file'; }
+    };
+    rd.readAsText(file);
+  }
+  document.getElementById('file-load').onchange = e => { if (e.target.files[0]) loadProject(e.target.files[0]); e.target.value = ''; };
+
+  /* ---- binary STL export (millimetres, Z-up like CAD programs) ---- */
+  function exportSTL() {
+    if (!objects3D.length) { statusBarText.innerText = 'Nothing to export yet'; return; }
+    const tris = [];
+    objects3D.forEach(o => {
+      o.updateMatrixWorld(true);
+      const g = o.geometry, pos = g.attributes.position, idx = g.index, e = o.matrixWorld.elements, n = idx ? idx.count : pos.count, flip = o.matrixWorld.determinant() < 0;
+      const P = i => { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14]; return [wx * MM, -wz * MM, wy * MM]; };
+      for (let i = 0; i + 2 < n; i += 3) {
+        let a = P(idx ? idx.getX(i) : i), b = P(idx ? idx.getX(i + 1) : i + 1), c = P(idx ? idx.getX(i + 2) : i + 2);
+        if (flip) { const t = b; b = c; c = t; }
+        tris.push([a, b, c]);
+      }
+    });
+    const buf = new ArrayBuffer(84 + tris.length * 50), dv = new DataView(buf);
+    const hdr = 'AR Gesture CAD Studio'; for (let i = 0; i < hdr.length; i++) dv.setUint8(i, hdr.charCodeAt(i));
+    dv.setUint32(80, tris.length, true);
+    tris.forEach((t, k) => {
+      const o = 84 + k * 50, u = [t[1][0] - t[0][0], t[1][1] - t[0][1], t[1][2] - t[0][2]], v = [t[2][0] - t[0][0], t[2][1] - t[0][1], t[2][2] - t[0][2]];
+      let nx = u[1] * v[2] - u[2] * v[1], ny = u[2] * v[0] - u[0] * v[2], nz = u[0] * v[1] - u[1] * v[0]; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+      [nx, ny, nz, ...t[0], ...t[1], ...t[2]].forEach((val, j) => dv.setFloat32(o + j * 4, val, true));
+    });
+    downloadBlob(new Blob([buf], { type: 'model/stl' }), 'cad_model.stl');
+    statusBarText.innerText = 'STL exported: ' + tris.length + ' triangles (mm)';
+  }
+
+  featuresReady = true;
+
+  /* ---- two-hand scale / rotate ---- */
+  let twoHand = null, pinchLockUntil = 0;
+  function pinchInfo(lm) {
+    const t = lm[4], i = lm[8], ix = (1 - i.x) * 1280, iy = i.y * 720, tx = (1 - t.x) * 1280, ty = t.y * 720;
+    return { ix, iy, tx, ty, dist: Math.hypot(ix - tx, iy - ty), mx: (ix + tx) / 2, my: (iy + ty) / 2 };
+  }
+  function drawTwoHandHud(a, b, text, ok) {
+    hudCtx.lineWidth = 4; hudCtx.strokeStyle = ok ? '#facc15' : '#f97316'; hudCtx.setLineDash(ok ? [] : [10, 8]);
+    hudCtx.beginPath(); hudCtx.moveTo(a.x, a.y); hudCtx.lineTo(b.x, b.y); hudCtx.stroke(); hudCtx.setLineDash([]);
+    [a, b].forEach(p => { hudCtx.beginPath(); hudCtx.arc(p.x, p.y, 11, 0, Math.PI * 2); hudCtx.fillStyle = '#10b981'; hudCtx.fill(); hudCtx.strokeStyle = '#fff'; hudCtx.lineWidth = 2; hudCtx.stroke(); });
+    hudCtx.font = '700 18px system-ui'; hudCtx.textAlign = 'center';
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 18, w = hudCtx.measureText(text).width + 20;
+    hudCtx.fillStyle = 'rgba(17,24,39,0.9)'; hudCtx.fillRect(mx - w / 2, my - 20, w, 30); hudCtx.fillStyle = ok ? '#facc15' : '#fdba74'; hudCtx.fillText(text, mx, my);
+  }
+  function handleTwoHand(infos) {
+    const a = { x: infos[0].mx, y: infos[0].my }, b = { x: infos[1].mx, y: infos[1].my };
+    const d = Math.max(20, getDistance(a, b)), ang = Math.atan2(b.y - a.y, b.x - a.x);
+    if (!twoHand) {
+      if (isPinching) { isPinching = false; if (previewMesh3D) { scene.remove(previewMesh3D); previewMesh3D = null; } }
+      autoSelectUnderCursor((a.x + b.x) / 2, (a.y + b.y) / 2);              // selects the object between the hands (if any)
+      if (!selectedObject || !objects3D.includes(selectedObject)) { twoHand = { none: true }; }
+      else { pushHistory(); twoHand = { d0: d, ds: d, a0: ang, as: ang, s0: selectedObject.scale.clone(), r0: selectedObject.rotation.z, obj: selectedObject }; }
+    }
+    if (twoHand.none) { statusBarText.innerText = 'Two hands: create or select an object first'; drawTwoHandHud(a, b, 'Select an object first', false); return; }
+    twoHand.ds += 0.4 * (d - twoHand.ds);
+    let dA = ang - twoHand.as; while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
+    twoHand.as += 0.4 * dA;
+    let rel = twoHand.as - twoHand.a0; while (rel > Math.PI) rel -= 2 * Math.PI; while (rel < -Math.PI) rel += 2 * Math.PI;
+    const ratio = twoHand.ds / twoHand.d0, o = twoHand.obj;
+    o.scale.set(Math.max(0.05, twoHand.s0.x * ratio), Math.max(0.05, twoHand.s0.y * ratio), Math.max(0.05, twoHand.s0.z * ratio));
+    o.rotation.z = twoHand.r0 - rel;
+    if (Math.abs(ratio - 1) > 0.2) markGuide('scale');
+    if (Math.abs(rel) > 0.35) markGuide('rotate');
+    const txt = 'Scale x' + ratio.toFixed(2) + '   Rotate ' + Math.round(-rel * 180 / Math.PI) + ' deg';
+    statusBarText.innerText = 'Two-hand mode: ' + txt;
+    drawTwoHandHud(a, b, txt, true);
+    updateMeasurements(o);
+  }
+
   function onResults(results) {
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      statusDot.classList.add('active');
-      const landmarks = results.multiHandLandmarks[0];
+    const hs = results.multiHandLandmarks || [];
+    hudCtx.clearRect(0, 0, 1280, 720);
+    if (hs.length === 0) {
+      twoHand = null;
+      statusDot.classList.remove('active');
+      statusBarText.innerText = 'Searching for hand...';
+      if (currentTool !== 'measure') pinchIndicator.innerText = 'Pinch Distance: --';
+      if (activeMode === '3D') { cursorMesh.position.set(2000, 2000, 0); if (hoveredFaceMarker) hoveredFaceMarker.visible = false; }
+      return;
+    }
+    statusDot.classList.add('active'); markGuide('point');
+    const infos = hs.slice(0, 2).map(pinchInfo);
 
-      const thumbTip = landmarks[4];
-      const indexTip = landmarks[8];
+    if (infos.length === 2 && activeMode === '3D' && infos[0].dist < 45 && infos[1].dist < 45) { handleTwoHand(infos); return; }
+    if (twoHand) { twoHand = null; pinchLockUntil = performance.now() + 700; }    // ignore single pinches briefly after two-hand use
 
-      const rawCursorX = (1 - indexTip.x) * 1280;
-      const rawCursorY = indexTip.y * 720;
-      const rawThumbX = (1 - thumbTip.x) * 1280;
-      const rawThumbY = thumbTip.y * 720;
+    let k = 0; if (infos.length === 2 && infos[0].dist >= 45 && infos[1].dist < 45) k = 1;
+    const info = infos[k], rawCursorX = info.ix, rawCursorY = info.iy;
+    smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
+    smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
 
-      smoothedCursor.x = alpha * rawCursorX + (1 - alpha) * smoothedCursor.x;
-      smoothedCursor.y = alpha * rawCursorY + (1 - alpha) * smoothedCursor.y;
+    if (activeMode === '3D') {
+      const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
+      cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+      checkFaceHover(smoothedCursor.x, smoothedCursor.y);
+    }
+    const pinchDist = info.dist;
+    if (currentTool !== 'measure') pinchIndicator.innerText = 'Pinch Distance: ' + Math.round(pinchDist) + 'px';
+    const currentlyPinching = pinchDist < 45 && (isPinching || performance.now() >= pinchLockUntil);
+    if (activeMode === '3D') cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
 
-      if (activeMode === '3D') {
-        const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
-        cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
-        checkFaceHover(smoothedCursor.x, smoothedCursor.y);
-      }
-
-      const pinchDist = getDistance(
-        { x: rawCursorX, y: rawCursorY },
-        { x: rawThumbX, y: rawThumbY }
-      );
-
-      if (currentTool !== 'measure') {
-        pinchIndicator.innerText = `Pinch Distance: ${Math.round(pinchDist)}px`;
-      }
-      
-      const currentlyPinching = pinchDist < 45;
-
-      if (activeMode === '3D') {
-        cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
-      }
-
-      if (currentlyPinching) {
-        if (!isPinching) {
-          isPinching = true;
-          startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-          
-          if (activeMode === '3D') {
-            autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y);
-          } else {
-            currentPreviewShape = {
-              tool: currentTool,
-              color: currentColor,
-              start: { x: smoothedCursor.x, y: smoothedCursor.y },
-              end: { x: smoothedCursor.x, y: smoothedCursor.y },
-              points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null
-            };
-          }
-
-          statusBarText.innerText = `Active [${activeMode} - ${currentTool.toUpperCase()}]`;
-          updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
-        } else {
-          if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) {
-            handleTransform(smoothedCursor, lastPinchPoint);
-          } else {
-            updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
-          }
-          lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-        }
+    if (currentlyPinching) {
+      markGuide('pinch');
+      if (!isPinching) {
+        isPinching = true;
+        startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+        lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
+        if (activeMode === '3D') autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y);
+        else currentPreviewShape = { tool: currentTool, color: currentColor, start: { x: smoothedCursor.x, y: smoothedCursor.y }, end: { x: smoothedCursor.x, y: smoothedCursor.y }, points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null };
+        statusBarText.innerText = 'Active [' + activeMode + ' - ' + currentTool.toUpperCase() + ']';
+        updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
       } else {
-        if (isPinching) {
-          isPinching = false;
-          statusBarText.innerText = `Tracking Active (${activeMode})`;
-          finalizeShape();
-        }
+        if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) { handleTransform(smoothedCursor, lastPinchPoint); markGuide('drag'); }
+        else updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
+        lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
       }
     } else {
-      statusDot.classList.remove('active');
-      statusBarText.innerText = "Searching for hand...";
-      if (currentTool !== 'measure') {
-        pinchIndicator.innerText = "Pinch Distance: --";
-      }
-      if (activeMode === '3D') {
-        cursorMesh.position.set(2000, 2000, 0);
-        if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
-      }
+      if (isPinching) { isPinching = false; statusBarText.innerText = 'Tracking Active (' + activeMode + ')'; finalizeShape(); }
+      else if (infos.length === 2 && activeMode === '3D') statusBarText.innerText = 'Two hands seen: pinch with BOTH hands to scale / rotate';
     }
   }
 
@@ -1242,7 +1545,7 @@ html_code = """
   });
 
   hands.setOptions({
-    maxNumHands: 1,
+    maxNumHands: 2,
     modelComplexity: 1,
     minDetectionConfidence: 0.65,
     minTrackingConfidence: 0.65
