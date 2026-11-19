@@ -9,7 +9,8 @@ st.set_page_config(
 )
 
 st.title("🎨 AR Gesture CAD Studio (2D & 3D AR)")
-st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine (AutoCAD Style)")
+st.caption("Edge-Computed Hand Tracking (MediaPipe) + WebGL Technical CAD Engine (AutoCAD Style)  |  Penjejakan tangan pada peranti (MediaPipe) + enjin CAD teknikal WebGL (gaya AutoCAD)")
+st.info("🌐 Language / Bahasa: use the **English / Bahasa Malaysia** buttons at the top of the left panel inside the studio.  |  Gunakan butang **English / Bahasa Malaysia** di bahagian atas panel kiri dalam studio.")
 
 # --- Initialize Session State for persistence ---
 if "stl_b64" not in st.session_state:
@@ -21,18 +22,18 @@ if "img_b64" not in st.session_state:
 col_up1, col_up2 = st.columns(2)
 
 with col_up1:
-    uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)", type=["stl"])
+    uploaded_file = st.file_uploader("📂 Import External 3D Model (.stl)  |  Import model 3D luaran (.stl)", type=["stl"])
     if uploaded_file is not None:
         stl_bytes = uploaded_file.read()
         st.session_state.stl_b64 = base64.b64encode(stl_bytes).decode("utf-8")
-        st.success(f"Loaded STL model: {uploaded_file.name}")
+        st.success(f"Loaded STL model / Model STL dimuatkan: {uploaded_file.name}")
 
 with col_up2:
-    uploaded_image = st.file_uploader("🖼️ Upload 2D Image/Sketch (PNG/JPG) to Convert to 3D", type=["png", "jpg", "jpeg"])
+    uploaded_image = st.file_uploader("🖼️ Upload 2D Image/Sketch (PNG/JPG) to Convert to 3D  |  Muat naik imej/lakaran 2D (PNG/JPG) untuk ditukar kepada 3D", type=["png", "jpg", "jpeg"])
     if uploaded_image is not None:
         img_bytes = uploaded_image.read()
         st.session_state.img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        st.success(f"Loaded 2D image '{uploaded_image.name}' for solid 3D extrusion!")
+        st.success(f"Loaded 2D image / Imej 2D dimuatkan '{uploaded_image.name}' for solid 3D extrusion / untuk penyemperitan 3D pepejal!")
 
 html_code = """
 <!DOCTYPE html>
@@ -314,6 +315,14 @@ html_code = """
 
   <div id="ui-panel">
     <div class="ui-group">
+      <span class="ui-label">Language / Bahasa</span>
+      <div class="btn-grid">
+        <button id="lang-en" class="active" onclick="setLang('en')">English</button>
+        <button id="lang-bm" onclick="setLang('bm')">Bahasa Malaysia</button>
+      </div>
+    </div>
+
+    <div class="ui-group">
       <span class="ui-label">Mode Selection</span>
       <div class="btn-grid">
         <button id="btn-mode-2d" onclick="switchMode('2D')">2D Canvas</button>
@@ -506,6 +515,89 @@ html_code = """
   let smoothedCursor = { x: 640, y: 360 };
   const alpha = 0.25;
 
+  /* ====================================================================================
+     Dual language: English / Bahasa Malaysia (button in the left panel, remembered in the browser)
+     ==================================================================================== */
+  const BM = {
+    'Mode Selection': 'Pilihan Mod', '2D Canvas': 'Kanvas 2D', '3D Engine': 'Enjin 3D', 'Color Palette': 'Palet Warna', '2D Sketching': 'Lakaran 2D',
+    'Freehand': 'Tangan bebas', 'Rectangle': 'Segi empat', 'Circle': 'Bulatan', 'Triangle': 'Segi tiga',
+    '3D Primitives & Create': 'Bentuk Asas 3D & Cipta', 'Sphere': 'Sfera', 'Cube': 'Kubus', 'Cone': 'Kon', 'Cylinder': 'Silinder', 'Pyramid': 'Piramid',
+    'Object Transform & Measure': 'Ubah Objek & Ukur', 'Move': 'Alih', 'Resize': 'Ubah saiz', 'Measure (mm)': 'Ukur (mm)',
+    'Rot X': 'Putar X', 'Rot Y': 'Putar Y', 'Rot Z': 'Putar Z', 'Delete Selected': 'Padam yang dipilih',
+    'Object Modification & Booleans': 'Ubah Suai Objek & Boolean', 'Extrude Face': 'Tonjol Muka (Extrude)', 'Union': 'Cantum', 'Intersect': 'Persilang', 'Subtract (Difference)': 'Tolak (Beza)',
+    'Project & Export': 'Projek & Eksport', 'Save project': 'Simpan projek', 'Load project': 'Buka projek', 'Export STL (mm)': 'Eksport STL (mm)',
+    'Section View (cut)': 'Pandangan Keratan', 'Flip side': 'Balikkan sisi', 'Controls': 'Kawalan', 'Undo (1 Step)': 'Buat asal (1 langkah)', 'Clear All': 'Kosongkan semua',
+    'Selected object': 'Objek dipilih', 'Type': 'Jenis', 'W (X) mm': 'L (X) mm', 'H (Y) mm': 'T (Y) mm', 'D (Z) mm': 'P (Z) mm', 'Material': 'Bahan',
+    'Volume': 'Isi padu', 'Surface area': 'Luas permukaan', 'Mass': 'Jisim',
+    'Type new W / H / D in mm and press Enter. Volume and mass are for closed solids (approximate for imported STL).': 'Taip L / T / P baharu dalam mm dan tekan Enter. Isi padu dan jisim adalah untuk pepejal tertutup (anggaran bagi STL yang diimport).',
+    '? Gesture guide': '? Panduan gerak isyarat',
+    'Hand gesture guide': 'Panduan gerak isyarat tangan',
+    'Stand 40-70 cm from the camera, keep good light on your hands and show your palm. Each card turns green when the app sees you do it.': 'Berdiri 40-70 cm dari kamera, pastikan tangan anda mendapat cahaya yang baik dan tunjukkan tapak tangan. Setiap kad bertukar hijau apabila aplikasi nampak anda melakukannya.',
+    '1. Point': '1. Tunjuk', 'Hold up one hand. Your index fingertip is the blue cursor.': 'Angkat satu tangan. Hujung jari telunjuk anda ialah kursor biru.',
+    '2. Pinch': '2. Cubit', 'Touch thumb and index tip together (distance under 45 px, shown bottom right). Pinch = select, draw or grab. Release = finish.': 'Rapatkan hujung ibu jari dan jari telunjuk (jarak kurang 45 px, ditunjukkan di kanan bawah). Cubit = pilih, lukis atau pegang. Lepas = selesai.',
+    'thumb + index touch': 'ibu jari + telunjuk bertemu',
+    '3. Pinch and drag': '3. Cubit dan seret', 'Choose Move, Resize, Rot X/Y/Z or Extrude, pinch the object and move your hand.': 'Pilih Alih, Ubah saiz, Putar X/Y/Z atau Tonjol, cubit objek dan gerakkan tangan anda.',
+    '4. Two hands: scale': '4. Dua tangan: skala', 'Pinch the object with BOTH hands (one pinch each). Move the hands apart to enlarge, together to shrink.': 'Cubit objek dengan KEDUA-DUA tangan (satu cubitan setiap tangan). Jauhkan tangan untuk membesarkan, dekatkan untuk mengecilkan.',
+    '5. Two hands: rotate': '5. Dua tangan: putar', 'Pinch with both hands, then twist them like turning a steering wheel. The object turns with the line between your hands.': 'Cubit dengan kedua-dua tangan, kemudian pusingkan seperti memutar stereng. Objek berputar mengikut garisan antara tangan anda.',
+    'Two-hand steps:': 'Langkah dua tangan:',
+    '(1) Create or choose a shape. (2) Pinch it once with one hand so it is selected (it turns orange). (3) Pinch with both hands at the same time, a yellow line appears between them. (4) Spread or squeeze to scale, twist to rotate. (5) Release both hands to finish. After two-hand use the app ignores single pinches for a moment, so shapes are not created by accident.': '(1) Cipta atau pilih satu bentuk. (2) Cubit sekali dengan satu tangan supaya ia dipilih (bertukar oren). (3) Cubit dengan kedua-dua tangan serentak, satu garisan kuning muncul di antara tangan. (4) Jauhkan atau dekatkan untuk skala, pusingkan untuk putar. (5) Lepaskan kedua-dua tangan untuk selesai. Selepas guna dua tangan, aplikasi mengabaikan cubitan tunggal seketika supaya bentuk tidak tercipta secara tidak sengaja.',
+    'No webcam?': 'Tiada kamera web?', 'You can still click the buttons, use Section view, type exact sizes and export.': 'Anda masih boleh klik butang, guna Pandangan Keratan, taip saiz tepat dan eksport.',
+    'Do not show this automatically': 'Jangan papar ini secara automatik', 'Start designing': 'Mula mereka bentuk'
+  };
+  const KIND_BM = { 'Cube': 'Kubus', 'Sphere': 'Sfera', 'Cone': 'Kon', 'Cylinder': 'Silinder', 'Pyramid': 'Piramid', 'STL import': 'Import STL', 'Sketch solid': 'Pepejal lakaran', 'Boolean union': 'Boolean cantum', 'Boolean intersect': 'Boolean persilang', 'Boolean subtract': 'Boolean tolak', 'Object': 'Objek' };
+  const MAT_BM = { 'Steel': 'Keluli', 'Aluminium': 'Aluminium', 'Cast iron': 'Besi tuang', 'Titanium': 'Titanium', 'Copper': 'Kuprum', 'ABS plastic': 'Plastik ABS' };
+  const DYN = {
+    en: {
+      noUndo: 'No previous action to undo', undoOk: 'Undo Successful (1 Step Back)', faceAcq: 'Face Target Acquired (Yellow)', deleted: 'Selected Object Deleted', objSel: 'Object Selected!',
+      pinchNone: 'Pinch Distance: --', pinchPx: n => 'Pinch Distance: ' + n + 'px', meas: (d, h, w, r) => 'L:' + d + 'mm | H:' + h + 'mm | W:' + w + 'mm | R:' + r + 'mm',
+      lbl_union: 'Union', lbl_intersect: 'Intersect', lbl_subtract: 'Subtract',
+      needTwo: l => 'Need at least 2 objects for ' + l, tooDetailed: (l, n) => 'Models too detailed for ' + l + ' in the browser (' + n + ' triangles)', failed: l => l + ' failed (try simpler shapes)',
+      noOverlap: 'Intersect: the two objects do not overlap', nothingLeft: l => l + ': nothing left, objects unchanged', boolOk: l => 'Boolean ' + l + ' Successful',
+      noSave: 'Nothing to save yet', saved: n => 'Project saved (' + n + ' objects)', loaded: n => 'Project loaded (' + n + ' objects)', loadFail: 'Could not load: not a valid project file',
+      noExport: 'Nothing to export yet', stlOk: n => 'STL exported: ' + n + ' triangles (mm)',
+      twoNone: 'Two hands: create or select an object first', hudSelect: 'Select an object first', twoMode: t => 'Two-hand mode: ' + t, hudScale: (r, d) => 'Scale x' + r + '   Rotate ' + d + ' deg',
+      searching: 'Searching for hand...', active: (m, tl) => 'Active [' + m + ' - ' + tl + ']', tracking: m => 'Tracking Active (' + m + ')',
+      twoSeen: 'Two hands seen: pinch with BOTH hands to scale / rotate', camDenied: 'Camera Access Denied/Failed', initCam: 'Initializing Camera...',
+      detected: 'Detected', notSeen: 'Not seen yet', secBtn: on => 'Section: ' + (on ? 'On' : 'Off'), secRead: (a, mm, f) => 'Cut ' + a + ' = ' + mm + ' mm' + (f ? ' (flipped)' : '')
+    },
+    bm: {
+      noUndo: 'Tiada tindakan sebelumnya untuk dibuat asal', undoOk: 'Buat asal berjaya (1 langkah ke belakang)', faceAcq: 'Sasaran muka ditemui (Kuning)', deleted: 'Objek yang dipilih telah dipadam', objSel: 'Objek dipilih!',
+      pinchNone: 'Jarak Cubitan: --', pinchPx: n => 'Jarak Cubitan: ' + n + 'px', meas: (d, h, w, r) => 'P:' + d + 'mm | T:' + h + 'mm | L:' + w + 'mm | J:' + r + 'mm',
+      lbl_union: 'Cantum', lbl_intersect: 'Persilang', lbl_subtract: 'Tolak',
+      needTwo: l => 'Perlu sekurang-kurangnya 2 objek untuk ' + l, tooDetailed: (l, n) => 'Model terlalu terperinci untuk ' + l + ' dalam pelayar (' + n + ' segi tiga)', failed: l => l + ' gagal (cuba bentuk yang lebih ringkas)',
+      noOverlap: 'Persilang: kedua-dua objek tidak bertindih', nothingLeft: l => l + ': tiada yang tinggal, objek tidak berubah', boolOk: l => 'Boolean ' + l + ' Berjaya',
+      noSave: 'Belum ada apa-apa untuk disimpan', saved: n => 'Projek disimpan (' + n + ' objek)', loaded: n => 'Projek dibuka (' + n + ' objek)', loadFail: 'Tidak dapat dibuka: bukan fail projek yang sah',
+      noExport: 'Belum ada apa-apa untuk dieksport', stlOk: n => 'STL dieksport: ' + n + ' segi tiga (mm)',
+      twoNone: 'Dua tangan: cipta atau pilih objek dahulu', hudSelect: 'Pilih objek dahulu', twoMode: t => 'Mod dua tangan: ' + t, hudScale: (r, d) => 'Skala x' + r + '   Putar ' + d + ' darjah',
+      searching: 'Mencari tangan...', active: (m, tl) => 'Aktif [' + m + ' - ' + tl + ']', tracking: m => 'Penjejakan aktif (' + m + ')',
+      twoSeen: 'Dua tangan dikesan: cubit dengan KEDUA-DUA tangan untuk skala / putar', camDenied: 'Akses kamera ditolak/gagal', initCam: 'Memulakan kamera...',
+      detected: 'Dikesan', notSeen: 'Belum dilihat', secBtn: on => 'Keratan: ' + (on ? 'Hidup' : 'Mati'), secRead: (a, mm, f) => 'Potong ' + a + ' = ' + mm + ' mm' + (f ? ' (dibalikkan)' : '')
+    }
+  };
+  let lang = 'en';
+  try { const sv = localStorage.getItem('cadLang'); lang = sv === 'bm' || sv === 'en' ? sv : (/^(ms|id)/i.test(navigator.language || '') ? 'bm' : 'en'); } catch (e) { }
+  const T = (k, ...a) => { const v = DYN[lang][k]; return typeof v === 'function' ? v(...a) : v; };
+  const kindText = k => lang === 'bm' ? (KIND_BM[k] || k) : (k || 'Object');
+  const matText = k => lang === 'bm' ? (MAT_BM[k] || k) : k;
+  const DYN_IDS = new Set(['status-text', 'pinch-indicator', 'p-kind', 'p-vol', 'p-area', 'p-mass', 'sec-readout', 'btn-section', 't-point', 't-pinch', 't-drag', 't-scale', 't-rotate']);
+  function applyLang() {
+    const walker = document.createTreeWalker(document.getElementById('studio-container'), NodeFilter.SHOW_TEXT); const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(n => {
+      let p = n.parentNode, skip = false; while (p && p.id !== 'studio-container') { if (p.id && DYN_IDS.has(p.id)) { skip = true; break; } p = p.parentNode; }
+      if (skip) return;
+      if (n.__en === undefined) n.__en = n.nodeValue;
+      const trimmed = n.__en.trim();
+      n.nodeValue = (lang === 'bm' && BM[trimmed]) ? n.__en.replace(trimmed, BM[trimmed]) : n.__en;
+    });
+    document.documentElement.lang = lang === 'bm' ? 'ms' : 'en';
+    document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+    document.getElementById('lang-bm').classList.toggle('active', lang === 'bm');
+    if (/--$/.test(pinchIndicator.innerText)) pinchIndicator.innerText = T('pinchNone');
+    if (typeof featuresReady !== 'undefined' && featuresReady) { buildMatOptions(); refreshSection(); refreshTicks(); lastPropsKey = ''; updateProps(); if (selectedObject && currentTool === 'measure') updateMeasurements(selectedObject); }
+  }
+  function setLang(l) { lang = l; try { localStorage.setItem('cadLang', l); } catch (e) { } applyLang(); }
+
   // --- Three.js Scene Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1280 / 720, 1, 2000);
@@ -572,7 +664,7 @@ html_code = """
 
   function performUndo() {
     if (historyStack.length === 0) {
-      statusBarText.innerText = "No previous action to undo";
+      statusBarText.innerText = T('noUndo');
       return;
     }
     const prevState = historyStack.pop();
@@ -609,9 +701,9 @@ html_code = """
       setHighlight(selectedObject, true);
       updateMeasurements(selectedObject);
     } else {
-      pinchIndicator.innerText = "Pinch Distance: --";
+      pinchIndicator.innerText = T('pinchNone');
     }
-    statusBarText.innerText = "Undo Successful (1 Step Back)";
+    statusBarText.innerText = T('undoOk');
   }
 
   function attachAutoCADEdges(mesh) {
@@ -654,7 +746,7 @@ html_code = """
     const depth = Math.round(size.z * 1.5);
     const radius = Math.round(Math.max(size.x, size.z) * 0.75);
 
-    pinchIndicator.innerText = `L:${depth}mm | H:${height}mm | W:${width}mm | R:${radius}mm`;
+    pinchIndicator.innerText = T('meas', depth, height, width, radius);
   }
 
   function checkFaceHover(screenX, screenY) {
@@ -674,7 +766,7 @@ html_code = """
       selectedObject = hit.object;
       hoveredFaceMarker.position.copy(hit.point);
       hoveredFaceMarker.visible = true;
-      statusBarText.innerText = "Face Target Acquired (Yellow)";
+      statusBarText.innerText = T('faceAcq');
     } else {
       hoveredFaceMarker.visible = false;
     }
@@ -901,8 +993,8 @@ html_code = """
       if (selectedObject.material) selectedObject.material.dispose();
       selectedObject = null;
       if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
-      statusBarText.innerText = "Selected Object Deleted";
-      pinchIndicator.innerText = "Pinch Distance: --";
+      statusBarText.innerText = T('deleted');
+      pinchIndicator.innerText = T('pinchNone');
     }
   }
 
@@ -1035,27 +1127,27 @@ html_code = """
     return obj2 ? { obj1, obj2 } : null;
   }
   function booleanOp(op) {
-    const label = { union: 'Union', intersect: 'Intersect', subtract: 'Subtract' }[op];
+    const label = T('lbl_' + op);
     const pair = getActivePair();
-    if (!pair) { statusBarText.innerText = `Need at least 2 objects for ${label}`; return; }
+    if (!pair) { statusBarText.innerText = T('needTwo', label); return; }
     const { obj1, obj2 } = pair;
     const nTri = (obj1.geometry.index ? obj1.geometry.index.count : obj1.geometry.attributes.position.count) / 3 + (obj2.geometry.index ? obj2.geometry.index.count : obj2.geometry.attributes.position.count) / 3;
-    if (nTri > 40000) { statusBarText.innerText = `Models too detailed for ${label} in the browser (${Math.round(nTri)} triangles)`; return; }
+    if (nTri > 40000) { statusBarText.innerText = T('tooDetailed', label, Math.round(nTri)); return; }
     let polys;
-    try { polys = csgCompute(op, obj1, obj2); } catch (e) { console.error(e); statusBarText.innerText = `${label} failed (try simpler shapes)`; return; }
+    try { polys = csgCompute(op, obj1, obj2); } catch (e) { console.error(e); statusBarText.innerText = T('failed', label); return; }
     const res = polysToGeometry(polys);
-    if (!res) { statusBarText.innerText = op === 'intersect' ? 'Intersect: the two objects do not overlap' : `${label}: nothing left, objects unchanged`; return; }
+    if (!res) { statusBarText.innerText = op === 'intersect' ? T('noOverlap') : T('nothingLeft', label); return; }
     pushHistory();
     const material = new THREE.MeshStandardMaterial({ color: obj1.material ? obj1.material.color.clone() : new THREE.Color(currentColor), roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide });
     const resultMesh = new THREE.Mesh(res.geometry, material);
-    resultMesh.userData.kind = 'Boolean ' + label.toLowerCase(); resultMesh.userData.mat = obj1.userData.mat || 'Steel';
+    resultMesh.userData.kind = 'Boolean ' + op; resultMesh.userData.mat = obj1.userData.mat || 'Steel';
     resultMesh.position.copy(res.center);
     [obj1, obj2].forEach(o => { scene.remove(o); const i = objects3D.indexOf(o); if (i > -1) objects3D.splice(i, 1); if (o.geometry) o.geometry.dispose(); });
     attachAutoCADEdges(resultMesh);
     scene.add(resultMesh); objects3D.push(resultMesh);
     if (selectedObject) setHighlight(selectedObject, false);
     selectedObject = resultMesh; setHighlight(selectedObject, true);
-    statusBarText.innerText = `Boolean ${label} Successful`;
+    statusBarText.innerText = T('boolOk', label);
     updateMeasurements(selectedObject);
   }
   function performUnion() { booleanOp('union'); }
@@ -1078,7 +1170,7 @@ html_code = """
         scene.remove(previewMesh3D);
         previewMesh3D = null;
       }
-      pinchIndicator.innerText = "Pinch Distance: --";
+      pinchIndicator.innerText = T('pinchNone');
     } else {
       permanentDrawings = [];
       currentPreviewShape = null;
@@ -1107,7 +1199,7 @@ html_code = """
       if (selectedObject) setHighlight(selectedObject, false);
       selectedObject = intersects[0].object;
       setHighlight(selectedObject, true);
-      statusBarText.innerText = "Object Selected!";
+      statusBarText.innerText = T('objSel');
       
       if (currentTool === 'measure') {
         updateMeasurements(selectedObject);
@@ -1283,12 +1375,14 @@ html_code = """
 
   /* ---- guide ---- */
   const guideState = { point: false, pinch: false, drag: false, scale: false, rotate: false };
+  function refreshTicks() { Object.keys(guideState).forEach(k => { const t = document.getElementById('t-' + k); if (t) t.innerText = guideState[k] ? T('detected') : T('notSeen'); }); }
+  function buildMatOptions() { const cur = matSel.value || 'Steel'; matSel.innerHTML = ''; Object.keys(MATERIALS).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = matText(k) + ' (' + MATERIALS[k] + ' g/cm3)'; matSel.appendChild(o); }); matSel.value = cur; }
   function markGuide(k) {
     if (guideState[k]) return;
     guideState[k] = true;
     const card = document.getElementById('g-' + k), tick = document.getElementById('t-' + k);
     if (card) card.classList.add('done');
-    if (tick) tick.innerText = 'Detected';
+    if (tick) tick.innerText = T('detected');
   }
   function showGuide(show) {
     document.getElementById('guide').style.display = show ? 'flex' : 'none';
@@ -1311,7 +1405,7 @@ html_code = """
     return { vol: Math.abs(vol) * MM * MM * MM, area: area * MM * MM };      // mm3, mm2
   }
   const matSel = document.getElementById('p-mat');
-  Object.keys(MATERIALS).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k + ' (' + MATERIALS[k] + ' g/cm3)'; matSel.appendChild(o); });
+  buildMatOptions();
   matSel.onchange = () => { if (selectedObject) { selectedObject.userData.mat = matSel.value; lastPropsKey = ''; updateProps(); } };
   ['x', 'y', 'z'].forEach(ax => {
     const el = document.getElementById('dim-' + ax);
@@ -1336,7 +1430,7 @@ html_code = """
     const s = new THREE.Vector3(); g.boundingBox.getSize(s);
     ['x', 'y', 'z'].forEach(ax => { const el = document.getElementById('dim-' + ax); if (document.activeElement !== el) el.value = (s[ax] * o.scale[ax] * MM).toFixed(1); });
     const mat = o.userData.mat || 'Steel'; if (matSel.value !== mat && document.activeElement !== matSel) matSel.value = mat;
-    document.getElementById('p-kind').innerText = o.userData.kind || 'Object';
+    document.getElementById('p-kind').innerText = kindText(o.userData.kind || 'Object');
     document.getElementById('p-vol').innerText = (lastStats.vol / 1000).toFixed(2) + ' cm3';
     document.getElementById('p-area').innerText = (lastStats.area / 100).toFixed(1) + ' cm2';
     document.getElementById('p-mass').innerText = fmtMass(lastStats.vol / 1000 * MATERIALS[mat]);
@@ -1353,9 +1447,9 @@ html_code = """
     cutHelper.position.set(0, 0, 0); cutHelper.position[sectionAxis] = sectionPos;
     cutHelper.rotation.set(0, sectionAxis === 'x' ? Math.PI / 2 : 0, 0); if (sectionAxis === 'y') cutHelper.rotation.x = Math.PI / 2;
     cutHelper.visible = sectionOn && activeMode === '3D';
-    document.getElementById('btn-section').innerText = 'Section: ' + (sectionOn ? 'On' : 'Off');
+    document.getElementById('btn-section').innerText = T('secBtn', sectionOn);
     document.getElementById('btn-section').classList.toggle('active', sectionOn);
-    document.getElementById('sec-readout').innerText = 'Cut ' + sectionAxis.toUpperCase() + ' = ' + Math.round(sectionPos * MM) + ' mm' + (sectionFlipped ? ' (flipped)' : '');
+    document.getElementById('sec-readout').innerText = T('secRead', sectionAxis.toUpperCase(), Math.round(sectionPos * MM), sectionFlipped);
   }
   function toggleSection() { sectionOn = !sectionOn; refreshSection(); }
   function setSectionAxis(a) { sectionAxis = a; ['x', 'y', 'z'].forEach(k => document.getElementById('sec-' + k).classList.toggle('active', k === a)); refreshSection(); }
@@ -1384,7 +1478,7 @@ html_code = """
   }
   function b64ToF32(b64) { const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); }
   function saveProject() {
-    if (!objects3D.length) { statusBarText.innerText = 'Nothing to save yet'; return; }
+    if (!objects3D.length) { statusBarText.innerText = T('noSave'); return; }
     const data = {
       app: 'ARGestureCAD', version: 1,
       objects: objects3D.map(o => {
@@ -1394,7 +1488,7 @@ html_code = """
       })
     };
     downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'cad_project.json');
-    statusBarText.innerText = 'Project saved (' + objects3D.length + ' objects)';
+    statusBarText.innerText = T('saved', objects3D.length);
   }
   function loadProject(file) {
     const rd = new FileReader();
@@ -1413,8 +1507,8 @@ html_code = """
           attachAutoCADEdges(m); scene.add(m); objects3D.push(m);
         });
         if (objects3D.length) { selectedObject = objects3D[objects3D.length - 1]; setHighlight(selectedObject, true); updateMeasurements(selectedObject); }
-        statusBarText.innerText = 'Project loaded (' + objects3D.length + ' objects)';
-      } catch (err) { console.error(err); statusBarText.innerText = 'Could not load: not a valid project file'; }
+        statusBarText.innerText = T('loaded', objects3D.length);
+      } catch (err) { console.error(err); statusBarText.innerText = T('loadFail'); }
     };
     rd.readAsText(file);
   }
@@ -1422,7 +1516,7 @@ html_code = """
 
   /* ---- binary STL export (millimetres, Z-up like CAD programs) ---- */
   function exportSTL() {
-    if (!objects3D.length) { statusBarText.innerText = 'Nothing to export yet'; return; }
+    if (!objects3D.length) { statusBarText.innerText = T('noExport'); return; }
     const tris = [];
     objects3D.forEach(o => {
       o.updateMatrixWorld(true);
@@ -1443,10 +1537,11 @@ html_code = """
       [nx, ny, nz, ...t[0], ...t[1], ...t[2]].forEach((val, j) => dv.setFloat32(o + j * 4, val, true));
     });
     downloadBlob(new Blob([buf], { type: 'model/stl' }), 'cad_model.stl');
-    statusBarText.innerText = 'STL exported: ' + tris.length + ' triangles (mm)';
+    statusBarText.innerText = T('stlOk', tris.length);
   }
 
   featuresReady = true;
+  applyLang(); statusBarText.innerText = T('initCam');
 
   /* ---- two-hand scale / rotate ---- */
   let twoHand = null, pinchLockUntil = 0;
@@ -1471,7 +1566,7 @@ html_code = """
       if (!selectedObject || !objects3D.includes(selectedObject)) { twoHand = { none: true }; }
       else { pushHistory(); twoHand = { d0: d, ds: d, a0: ang, as: ang, s0: selectedObject.scale.clone(), r0: selectedObject.rotation.z, obj: selectedObject }; }
     }
-    if (twoHand.none) { statusBarText.innerText = 'Two hands: create or select an object first'; drawTwoHandHud(a, b, 'Select an object first', false); return; }
+    if (twoHand.none) { statusBarText.innerText = T('twoNone'); drawTwoHandHud(a, b, T('hudSelect'), false); return; }
     twoHand.ds += 0.4 * (d - twoHand.ds);
     let dA = ang - twoHand.as; while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
     twoHand.as += 0.4 * dA;
@@ -1481,8 +1576,8 @@ html_code = """
     o.rotation.z = twoHand.r0 - rel;
     if (Math.abs(ratio - 1) > 0.2) markGuide('scale');
     if (Math.abs(rel) > 0.35) markGuide('rotate');
-    const txt = 'Scale x' + ratio.toFixed(2) + '   Rotate ' + Math.round(-rel * 180 / Math.PI) + ' deg';
-    statusBarText.innerText = 'Two-hand mode: ' + txt;
+    const txt = T('hudScale', ratio.toFixed(2), Math.round(-rel * 180 / Math.PI));
+    statusBarText.innerText = T('twoMode', txt);
     drawTwoHandHud(a, b, txt, true);
     updateMeasurements(o);
   }
@@ -1493,8 +1588,8 @@ html_code = """
     if (hs.length === 0) {
       twoHand = null;
       statusDot.classList.remove('active');
-      statusBarText.innerText = 'Searching for hand...';
-      if (currentTool !== 'measure') pinchIndicator.innerText = 'Pinch Distance: --';
+      statusBarText.innerText = T('searching');
+      if (currentTool !== 'measure') pinchIndicator.innerText = T('pinchNone');
       if (activeMode === '3D') { cursorMesh.position.set(2000, 2000, 0); if (hoveredFaceMarker) hoveredFaceMarker.visible = false; }
       return;
     }
@@ -1515,7 +1610,7 @@ html_code = """
       checkFaceHover(smoothedCursor.x, smoothedCursor.y);
     }
     const pinchDist = info.dist;
-    if (currentTool !== 'measure') pinchIndicator.innerText = 'Pinch Distance: ' + Math.round(pinchDist) + 'px';
+    if (currentTool !== 'measure') pinchIndicator.innerText = T('pinchPx', Math.round(pinchDist));
     const currentlyPinching = pinchDist < 45 && (isPinching || performance.now() >= pinchLockUntil);
     if (activeMode === '3D') cursorMat.color.setHex(currentlyPinching ? 0x10b981 : 0x38bdf8);
 
@@ -1527,7 +1622,7 @@ html_code = """
         lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
         if (activeMode === '3D') autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y);
         else currentPreviewShape = { tool: currentTool, color: currentColor, start: { x: smoothedCursor.x, y: smoothedCursor.y }, end: { x: smoothedCursor.x, y: smoothedCursor.y }, points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null };
-        statusBarText.innerText = 'Active [' + activeMode + ' - ' + currentTool.toUpperCase() + ']';
+        statusBarText.innerText = T('active', activeMode, currentTool.toUpperCase());
         updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
       } else {
         if (activeMode === '3D' && ['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool)) { handleTransform(smoothedCursor, lastPinchPoint); markGuide('drag'); }
@@ -1535,8 +1630,8 @@ html_code = """
         lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
       }
     } else {
-      if (isPinching) { isPinching = false; statusBarText.innerText = 'Tracking Active (' + activeMode + ')'; finalizeShape(); }
-      else if (infos.length === 2 && activeMode === '3D') statusBarText.innerText = 'Two hands seen: pinch with BOTH hands to scale / rotate';
+      if (isPinching) { isPinching = false; statusBarText.innerText = T('tracking', activeMode); finalizeShape(); }
+      else if (infos.length === 2 && activeMode === '3D') statusBarText.innerText = T('twoSeen');
     }
   }
 
@@ -1562,9 +1657,9 @@ html_code = """
   });
 
   cameraMedia.start().then(() => {
-    statusBarText.innerText = "Tracking Active (3D)";
+    statusBarText.innerText = T('tracking', '3D');
   }).catch((err) => {
-    statusBarText.innerText = "Camera Access Denied/Failed";
+    statusBarText.innerText = T('camDenied');
     console.error(err);
   });
 </script>
