@@ -732,7 +732,7 @@ html_code = """
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvasWebGL, antialias: true, alpha: false });
   renderer.setSize(1280, 720);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
   // --- Background Video Stream Plane ---
   const videoTexture = new THREE.VideoTexture(videoElement);
@@ -902,7 +902,13 @@ html_code = """
     }
 
     cursorMesh.visible = (activeMode === '3D');
-    if (proReady) { if (orbit.dirty) updateCamera(); updateFloor(); }
+    if (proReady) {
+      if (orbit.dirty) updateCamera(); updateFloor();
+      let sh = objects3D.length + (previewMesh3D ? 1 : 0);                      // re-render shadows only when something moved
+      objects3D.forEach(o => { const e = o.matrixWorld.elements; sh += e[12] * 1.3 + e[13] * 1.7 + e[14] * 1.9 + e[0] + e[5] + e[10] + e[1] + e[2] + e[4] + e[6]; });
+      if (previewMesh3D) { const e = previewMesh3D.matrixWorld.elements; sh += e[12] + e[13] + e[0] + e[2]; }
+      if (Math.abs(sh - (window.__shSig || 0)) > 1e-6) { window.__shSig = sh; renderer.shadowMap.needsUpdate = true; }
+    }
     if (featuresReady) { applyClipping(); const t = performance.now(); if (t - lastPropsT > 200) { lastPropsT = t; updateProps(); } cutHelper.visible = sectionOn && activeMode === '3D'; }
 
     renderer.render(scene, camera);
@@ -1696,7 +1702,8 @@ html_code = """
     updateMeasurements(o);
   }
 
-  function onResults(results) {
+  function onResults(results) { try { onResultsInner(results); } catch (err) { statusBarText.innerText = 'Error: ' + err.message; } }
+  function onResultsInner(results) {
     const hs = results.multiHandLandmarks || [];
     hudCtx.clearRect(0, 0, 1280, 720);
     if (hs.length === 0) {
@@ -1771,8 +1778,8 @@ html_code = """
   scene.add(camera); camera.add(bgMesh); bgMesh.position.set(0, 0, -1100);       // video backdrop follows the camera
 
   /* ---- grid floor + soft shadows ---- */
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  keyLight.castShadow = true; keyLight.shadow.mapSize.set(2048, 2048); keyLight.shadow.bias = -0.0006; keyLight.shadow.radius = 4;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;
+  keyLight.castShadow = true; keyLight.shadow.mapSize.set(1024, 1024); keyLight.shadow.bias = -0.0006; keyLight.shadow.radius = 4;
   Object.assign(keyLight.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 10, far: 2000 });
   const FLOOR_MIN = -130;
   const floorShadow = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.ShadowMaterial({ opacity: 0.3 }));
@@ -1921,7 +1928,7 @@ html_code = """
 
   const cameraMedia = new Camera(videoElement, {
     onFrame: async () => {
-      await hands.send({ image: videoElement });
+      try { await hands.send({ image: videoElement }); } catch (err) { }
     },
     width: 1280,
     height: 720
