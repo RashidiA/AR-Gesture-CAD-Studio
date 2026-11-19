@@ -304,6 +304,43 @@ html_code = """
     #guide .tips { margin: 14px 0 0; padding: 10px 12px; background: #0b1220; border-radius: 10px; color: #cbd5e1; font-size: 12px; line-height: 1.5; }
     #guide .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: #94a3b8; font-size: 12px; }
     #guide .foot button { background: #0284c7; color: #fff; border-color: #38bdf8; padding: 9px 22px; font-size: 13px; }
+    #webgl-canvas { touch-action: none; cursor: grab; }
+    #webgl-canvas:active { cursor: grabbing; }
+    .ui-label.fold { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .ui-label.fold::after { content: '▾'; }
+    .ui-group.collapsed > .ui-label.fold::after { content: '▸'; }
+    .ui-group.collapsed > :not(.ui-label) { display: none !important; }
+    #toolbar {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 11; display: flex; align-items: center; gap: 4px;
+      background: rgba(17, 24, 39, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12); padding: 6px 8px; border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    }
+    .tb { width: 32px; height: 32px; padding: 0; font-size: 15px; border-radius: 8px; line-height: 1; }
+    .tb-sep { width: 1px; height: 22px; background: #374151; margin: 0 4px; }
+    #btn-redo { background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; }
+    #btn-redo:hover { background: #0284c7; color: white; }
+    .chk { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9ca3af; cursor: pointer; }
+    #viewcube { position: absolute; bottom: 72px; right: 28px; z-index: 10; width: 70px; height: 70px; perspective: 320px; }
+    #vc-cube { position: relative; width: 70px; height: 70px; transform-style: preserve-3d; transition: transform .05s linear; }
+    .vc-f { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #e2e8f0;
+      background: rgba(15, 23, 42, 0.88); border: 1px solid #475569; cursor: pointer; backface-visibility: hidden; }
+    .vc-f:hover { background: #0284c7; }
+    #vc-front { transform: translateZ(35px); } #vc-back { transform: rotateY(180deg) translateZ(35px); }
+    #vc-right { transform: rotateY(90deg) translateZ(35px); } #vc-left { transform: rotateY(-90deg) translateZ(35px); }
+    #vc-top { transform: rotateX(90deg) translateZ(35px); } #vc-bottom { transform: rotateX(-90deg) translateZ(35px); }
+    #restore-bar { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); z-index: 12; display: none; align-items: center; gap: 10px;
+      background: rgba(3, 105, 161, 0.95); border: 1px solid #38bdf8; color: #fff; padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5); }
+    #restore-bar button { background: #0f172a; color: #e2e8f0; padding: 5px 12px; }
+    #as-ind { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 9; font-size: 10px; color: #10b981; opacity: 0; transition: opacity .4s; pointer-events: none; }
+    #keys { position: absolute; inset: 0; z-index: 50; background: rgba(3, 7, 18, 0.88); display: none; align-items: center; justify-content: center; }
+    #keys .box { width: 760px; max-height: 640px; overflow-y: auto; background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 20px 24px; }
+    #keys h2 { margin: 0 0 12px; font-size: 20px; color: #f8fafc; }
+    #keys .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    #keys h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #38bdf8; }
+    #keys .r { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1f2937; font-size: 12px; color: #cbd5e1; }
+    #keys .r b { color: #facc15; font-family: ui-monospace, Consolas, monospace; font-size: 11px; white-space: nowrap; }
+    #keys .foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+    #keys .foot button { background: #0284c7; color: #fff; border-color: #38bdf8; padding: 9px 22px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -393,7 +430,7 @@ html_code = """
       <button id="btn-subtract" onclick="performSubtract()">Subtract (Difference)</button>
     </div>
 
-    <div class="ui-group">
+    <div class="ui-group" id="group-project">
       <span class="ui-label">Project & Export</span>
       <div class="btn-grid">
         <button id="btn-save" onclick="saveProject()">Save project</button>
@@ -418,12 +455,85 @@ html_code = """
       </div>
     </div>
 
-    <div class="ui-group">
+    <div class="ui-group" id="group-controls">
       <span class="ui-label">Controls</span>
       <div class="btn-grid">
-        <button id="btn-undo" onclick="performUndo()">Undo (1 Step)</button>
-        <button id="btn-clear" onclick="clearCanvas()">Clear All</button>
+        <button id="btn-undo" onclick="performUndo()">Undo</button>
+        <button id="btn-redo" onclick="performRedo()">Redo</button>
       </div>
+      <button id="btn-clear" onclick="clearCanvas()">Clear All</button>
+      <label class="chk"><input type="checkbox" id="chk-spin"> Auto-rotate objects</label>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button class="tb" id="tb-undo" data-tt="Undo (Ctrl+Z)" onclick="performUndo()">↶</button>
+    <button class="tb" id="tb-redo" data-tt="Redo (Ctrl+Y)" onclick="performRedo()">↷</button>
+    <span class="tb-sep"></span>
+    <button class="tb" data-tool="move" data-tt="Move (drag with mouse or pinch)" onclick="setTool('move')">✥</button>
+    <button class="tb" data-tool="resize" data-tt="Resize" onclick="setTool('resize')">⤢</button>
+    <button class="tb" data-tool="cube" data-tt="Add cube (or double-click empty space)" onclick="setTool('cube')">▣</button>
+    <button class="tb" data-tool="sphere" data-tt="Add sphere" onclick="setTool('sphere')">●</button>
+    <button class="tb" data-tool="cylinder" data-tt="Add cylinder" onclick="setTool('cylinder')">⬭</button>
+    <span class="tb-sep"></span>
+    <button class="tb" data-tt="Union" onclick="performUnion()">∪</button>
+    <button class="tb" data-tt="Intersect" onclick="performIntersect()">∩</button>
+    <button class="tb" data-tt="Subtract" onclick="performSubtract()">−</button>
+    <span class="tb-sep"></span>
+    <button class="tb" id="tb-section" data-tt="Section view" onclick="toggleSection()">✂</button>
+    <button class="tb active" id="tb-grid" data-tt="Grid (G)" onclick="toggleGrid()">▦</button>
+    <button class="tb" data-tt="Reset view (F)" onclick="resetView()">⌂</button>
+    <span class="tb-sep"></span>
+    <button class="tb" data-tt="Save project (Ctrl+S)" onclick="saveProject()">💾</button>
+    <button class="tb" data-tt="Load project" onclick="document.getElementById('file-load').click()">📂</button>
+    <button class="tb" data-tt="Export STL" onclick="exportSTL()">⬇</button>
+    <span class="tb-sep"></span>
+    <button class="tb" data-tt="Gesture guide (H)" onclick="showGuide(true)">?</button>
+    <button class="tb" data-tt="Keyboard shortcuts (K)" onclick="showKeys(true)">⌨</button>
+  </div>
+  <div id="as-ind">✓ Auto-saved</div>
+  <div id="restore-bar"><span id="restore-text"></span><button onclick="restoreAutosave()">Restore</button><button onclick="discardAutosave()">Discard</button></div>
+
+  <div id="viewcube" title="View cube">
+    <div id="vc-cube">
+      <div class="vc-f" id="vc-front" data-th="0" data-e="0">Front</div>
+      <div class="vc-f" id="vc-back" data-th="3.14159" data-e="0">Back</div>
+      <div class="vc-f" id="vc-right" data-th="1.5708" data-e="0">Right</div>
+      <div class="vc-f" id="vc-left" data-th="-1.5708" data-e="0">Left</div>
+      <div class="vc-f" id="vc-top" data-th="0" data-e="1.5">Top</div>
+      <div class="vc-f" id="vc-bottom" data-th="0" data-e="-1.5">Bottom</div>
+    </div>
+  </div>
+
+  <div id="keys">
+    <div class="box">
+      <h2>Keyboard & mouse shortcuts</h2>
+      <div class="cols">
+        <div>
+          <h3>Keyboard</h3>
+          <div class="r"><b>Ctrl + Z</b><span>Undo</span></div>
+          <div class="r"><b>Ctrl + Y</b><span>Redo</span></div>
+          <div class="r"><b>Ctrl + S</b><span>Save project</span></div>
+          <div class="r"><b>Ctrl + D</b><span>Duplicate selected</span></div>
+          <div class="r"><b>Delete</b><span>Delete selected</span></div>
+          <div class="r"><b>G</b><span>Show / hide grid</span></div>
+          <div class="r"><b>F</b><span>Reset view</span></div>
+          <div class="r"><b>1 / 2 / 3</b><span>Front / Right / Top view</span></div>
+          <div class="r"><b>H</b><span>Gesture guide</span></div>
+          <div class="r"><b>K</b><span>This shortcut list</span></div>
+          <div class="r"><b>Esc</b><span>Close windows</span></div>
+        </div>
+        <div>
+          <h3>Mouse and touch</h3>
+          <div class="r"><b>Left-drag</b><span>Orbit (rotate the view)</span></div>
+          <div class="r"><b>Right-drag</b><span>Pan (move the view)</span></div>
+          <div class="r"><b>Wheel / pinch</b><span>Zoom</span></div>
+          <div class="r"><b>Click</b><span>Select an object</span></div>
+          <div class="r"><b>Double-click</b><span>Add the chosen shape</span></div>
+          <div class="r"><b>Drag (Move tool)</b><span>Move the object</span></div>
+        </div>
+      </div>
+      <div class="foot"><button onclick="showKeys(false)">Close</button></div>
     </div>
   </div>
 
@@ -495,7 +605,7 @@ html_code = """
   const statusDot = document.getElementById('status-dot');
   const pinchIndicator = document.getElementById('pinch-indicator');
 
-  var featuresReady = false;   // set true once the engineering tools below are initialised
+  var featuresReady = false, proReady = false, autoSpin = false;   // set true once the engineering tools below are initialised
   let activeMode = '3D';
   let currentTool = 'cube';
   let currentColor = '#38bdf8';
@@ -590,6 +700,8 @@ html_code = """
       const trimmed = n.__en.trim();
       n.nodeValue = (lang === 'bm' && BM[trimmed]) ? n.__en.replace(trimmed, BM[trimmed]) : n.__en;
     });
+    document.querySelectorAll('[data-tt]').forEach(el => { el.title = lang === 'bm' ? (BM[el.dataset.tt] || el.dataset.tt) : el.dataset.tt; });
+    document.getElementById('viewcube').title = lang === 'bm' ? BM['View cube'] : 'View cube';
     document.documentElement.lang = lang === 'bm' ? 'ms' : 'en';
     document.getElementById('lang-en').classList.toggle('active', lang === 'en');
     document.getElementById('lang-bm').classList.toggle('active', lang === 'bm');
@@ -598,6 +710,21 @@ html_code = """
   }
   function setLang(l) { lang = l; try { localStorage.setItem('cadLang', l); } catch (e) { } applyLang(); }
 
+  Object.assign(BM, {
+    'Language / Bahasa': 'Language / Bahasa', 'Undo': 'Buat asal', 'Redo': 'Buat semula', 'Auto-rotate objects': 'Putar objek secara automatik', 'Subtract': 'Tolak',
+    'Front': 'Depan', 'Back': 'Belakang', 'Right': 'Kanan', 'Left': 'Kiri', 'Top': 'Atas', 'Bottom': 'Bawah', 'Restore': 'Pulihkan', 'Discard': 'Buang', '✓ Auto-saved': '✓ Disimpan automatik',
+    'Keyboard & mouse shortcuts': 'Pintasan papan kekunci & tetikus', 'Keyboard': 'Papan kekunci', 'Mouse and touch': 'Tetikus dan sentuhan', 'Close': 'Tutup',
+    'Save project (Ctrl+S)': 'Simpan projek (Ctrl+S)', 'Duplicate selected': 'Salin objek dipilih', 'Delete selected': 'Padam objek dipilih', 'Show / hide grid': 'Papar / sembunyi grid', 'Reset view': 'Set semula pandangan',
+    'Front / Right / Top view': 'Pandangan Depan / Kanan / Atas', 'Gesture guide': 'Panduan gerak isyarat', 'This shortcut list': 'Senarai pintasan ini', 'Close windows': 'Tutup tetingkap',
+    'Left-drag': 'Seret kiri', 'Right-drag': 'Seret kanan', 'Wheel / pinch': 'Roda / cubit', 'Click': 'Klik', 'Double-click': 'Klik dua kali', 'Drag (Move tool)': 'Seret (alat Alih)',
+    'Orbit (rotate the view)': 'Orbit (putar pandangan)', 'Pan (move the view)': 'Pan (gerakkan pandangan)', 'Zoom': 'Zum', 'Select an object': 'Pilih objek', 'Add the chosen shape': 'Tambah bentuk yang dipilih', 'Move the object': 'Alih objek',
+    'Undo (Ctrl+Z)': 'Buat asal (Ctrl+Z)', 'Redo (Ctrl+Y)': 'Buat semula (Ctrl+Y)', 'Move (drag with mouse or pinch)': 'Alih (seret dengan tetikus atau cubit)', 'Add cube (or double-click empty space)': 'Tambah kubus (atau klik dua kali pada ruang kosong)',
+    'Add sphere': 'Tambah sfera', 'Add cylinder': 'Tambah silinder', 'Section view': 'Pandangan keratan', 'Grid (G)': 'Grid (G)', 'Reset view (F)': 'Set semula pandangan (F)', 'Export STL': 'Eksport STL',
+    'Gesture guide (H)': 'Panduan gerak isyarat (H)', 'Keyboard shortcuts (K)': 'Pintasan papan kekunci (K)', 'View cube': 'Kubus pandangan'
+  });
+  Object.assign(DYN.en, { noRedo: 'No action to redo', redoOk: 'Redo successful', dup: 'Object duplicated', shapeAdded: 'Shape added', restored: n => 'Session restored (' + n + ' objects)', restoreMsg: (n, t) => 'Previous session found: ' + n + ' objects, saved ' + t });
+  Object.assign(DYN.bm, { noRedo: 'Tiada tindakan untuk dibuat semula', redoOk: 'Buat semula berjaya', dup: 'Objek disalin', shapeAdded: 'Bentuk ditambah', restored: n => 'Sesi dipulihkan (' + n + ' objek)', restoreMsg: (n, t) => 'Sesi sebelumnya dijumpai: ' + n + ' objek, disimpan ' + t });
+  DYN_IDS.add('restore-text');
   // --- Three.js Scene Setup ---
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1280 / 720, 1, 2000);
@@ -648,62 +775,42 @@ html_code = """
   const objects3D = [];
   let previewMesh3D = null;
 
-  function pushHistory() {
-    const stateSnapshot = objects3D.map(obj => ({
-      geometry: obj.geometry.clone(),
-      material: obj.material.clone(),
-      position: obj.position.clone(),
-      rotation: obj.rotation.clone(),
-      scale: obj.scale.clone(),
-      color: obj.material.color.getHexString(),
-      kind: obj.userData.kind, mat: obj.userData.mat
+  const redoStack = [];
+  function snapshot() {
+    return objects3D.map(obj => ({
+      geometry: obj.geometry.clone(), position: obj.position.clone(), rotation: obj.rotation.clone(), scale: obj.scale.clone(),
+      color: obj.material.color.getHexString(), kind: obj.userData.kind, mat: obj.userData.mat
     }));
-    historyStack.push(stateSnapshot);
-    if (historyStack.length > 25) historyStack.shift();
   }
-
-  function performUndo() {
-    if (historyStack.length === 0) {
-      statusBarText.innerText = T('noUndo');
-      return;
-    }
-    const prevState = historyStack.pop();
-
-    objects3D.forEach(obj => {
-      scene.remove(obj);
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) obj.material.dispose();
-    });
-    objects3D.length = 0;
-    selectedObject = null;
+  function pushHistory() {
+    historyStack.push(snapshot());
+    if (historyStack.length > 40) historyStack.shift();
+    redoStack.length = 0;
+  }
+  function restoreSnapshot(prevState) {
+    objects3D.forEach(obj => { scene.remove(obj); if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose(); });
+    objects3D.length = 0; selectedObject = null;
     if (hoveredFaceMarker) hoveredFaceMarker.visible = false;
-
     prevState.forEach(data => {
-      const mat = new THREE.MeshStandardMaterial({
-        color: '#' + data.color,
-        roughness: 0.35,
-        metalness: 0.25,
-        emissive: 0x000000,
-        side: THREE.DoubleSide
-      });
+      const mat = new THREE.MeshStandardMaterial({ color: '#' + data.color, roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(data.geometry, mat);
-      mesh.position.copy(data.position);
-      mesh.rotation.copy(data.rotation);
-      mesh.scale.copy(data.scale);
+      mesh.position.copy(data.position); mesh.rotation.copy(data.rotation); mesh.scale.copy(data.scale);
       mesh.userData.kind = data.kind; mesh.userData.mat = data.mat;
-      attachAutoCADEdges(mesh);
-      scene.add(mesh);
-      objects3D.push(mesh);
+      attachAutoCADEdges(mesh); scene.add(mesh); objects3D.push(mesh);
     });
-
-    if (objects3D.length > 0) {
-      selectedObject = objects3D[objects3D.length - 1];
-      setHighlight(selectedObject, true);
-      updateMeasurements(selectedObject);
-    } else {
-      pinchIndicator.innerText = T('pinchNone');
-    }
+    if (objects3D.length > 0) { selectedObject = objects3D[objects3D.length - 1]; setHighlight(selectedObject, true); updateMeasurements(selectedObject); }
+    else pinchIndicator.innerText = T('pinchNone');
+    if (typeof lastPropsKey !== 'undefined') lastPropsKey = '';
+  }
+  function performUndo() {
+    if (historyStack.length === 0) { statusBarText.innerText = T('noUndo'); return; }
+    redoStack.push(snapshot()); restoreSnapshot(historyStack.pop());
     statusBarText.innerText = T('undoOk');
+  }
+  function performRedo() {
+    if (redoStack.length === 0) { statusBarText.innerText = T('noRedo'); return; }
+    historyStack.push(snapshot()); restoreSnapshot(redoStack.pop());
+    statusBarText.innerText = T('redoOk');
   }
 
   function attachAutoCADEdges(mesh) {
@@ -712,6 +819,7 @@ html_code = """
     const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
     edgeLines.name = "cadEdgeLines";
     mesh.add(edgeLines);
+    mesh.castShadow = true;
   }
 
   function setColor(colorHex, el) {
@@ -781,7 +889,7 @@ html_code = """
 
     objects3D.forEach(obj => {
       obj.visible = (activeMode === '3D');
-      if (activeMode === '3D' && obj !== selectedObject) {
+      if (activeMode === '3D' && obj !== selectedObject && autoSpin) {
         obj.rotation.y += 0.003;
       }
     });
@@ -794,6 +902,7 @@ html_code = """
     }
 
     cursorMesh.visible = (activeMode === '3D');
+    if (proReady) { if (orbit.dirty) updateCamera(); updateFloor(); }
     if (featuresReady) { applyClipping(); const t = performance.now(); if (t - lastPropsT > 200) { lastPropsT = t; updateProps(); } cutHelper.visible = sectionOn && activeMode === '3D'; }
 
     renderer.render(scene, camera);
@@ -971,6 +1080,7 @@ html_code = """
       if (!['btn-delete', 'btn-union', 'btn-intersect', 'btn-subtract', 'btn-undo'].includes(btn.id)) btn.classList.remove('active');
     });
 
+    document.querySelectorAll('.tb[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === currentTool));
     const activeBtn = document.getElementById(`btn-${currentTool}`);
     if (activeBtn) {
       activeBtn.classList.add('active');
@@ -1183,9 +1293,9 @@ html_code = """
   }
 
   function mapScreenTo3D(screenX, screenY) {
-    const x = (screenX - 640) * 0.55;
-    const y = -(screenY - 360) * 0.55;
-    return new THREE.Vector3(x, y, 0);
+    if (!proReady) return new THREE.Vector3((screenX - 640) * 0.55, -(screenY - 360) * 0.55, 0);
+    const b = camBasis();                                           // camera-relative: identical to the old mapping in the default view
+    return orbit.target.clone().addScaledVector(b.r, (screenX - 640) * 0.55).addScaledVector(b.u, -(screenY - 360) * 0.55);
   }
 
   function autoSelectUnderCursor(screenX, screenY) {
@@ -1299,8 +1409,8 @@ html_code = """
 
     if (currentTool === 'move') {
       const pos3D = mapScreenTo3D(currPos.x, currPos.y);
-      selectedObject.position.x = pos3D.x;
-      selectedObject.position.y = pos3D.y;
+      if (proReady) { const b = camBasis(), depth = selectedObject.position.clone().sub(orbit.target).dot(b.d); selectedObject.position.copy(pos3D).addScaledVector(b.d, depth); }
+      else { selectedObject.position.x = pos3D.x; selectedObject.position.y = pos3D.y; }
     } else if (currentTool === 'resize') {
       const scaleDelta = (dx - dy) * 0.01;
       const currentScale = selectedObject.scale.x;
@@ -1449,6 +1559,7 @@ html_code = """
     cutHelper.visible = sectionOn && activeMode === '3D';
     document.getElementById('btn-section').innerText = T('secBtn', sectionOn);
     document.getElementById('btn-section').classList.toggle('active', sectionOn);
+    document.getElementById('tb-section').classList.toggle('active', sectionOn);
     document.getElementById('sec-readout').innerText = T('secRead', sectionAxis.toUpperCase(), Math.round(sectionPos * MM), sectionFlipped);
   }
   function toggleSection() { sectionOn = !sectionOn; refreshSection(); }
@@ -1477,9 +1588,8 @@ html_code = """
     return btoa(s);
   }
   function b64ToF32(b64) { const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); }
-  function saveProject() {
-    if (!objects3D.length) { statusBarText.innerText = T('noSave'); return; }
-    const data = {
+  function serializeProject() {
+    return {
       app: 'ARGestureCAD', version: 1,
       objects: objects3D.map(o => {
         let g = o.geometry; if (g.index) g = g.toNonIndexed();
@@ -1487,28 +1597,32 @@ html_code = """
           pos: o.position.toArray(), rot: [o.rotation.x, o.rotation.y, o.rotation.z], scale: o.scale.toArray(), geom: f32ToB64(new Float32Array(g.attributes.position.array)) };
       })
     };
-    downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'cad_project.json');
+  }
+  function saveProject() {
+    if (!objects3D.length) { statusBarText.innerText = T('noSave'); return; }
+    downloadBlob(new Blob([JSON.stringify(serializeProject())], { type: 'application/json' }), 'cad_project.json');
     statusBarText.innerText = T('saved', objects3D.length);
+  }
+  function loadFromData(data, append) {
+    if (data.app !== 'ARGestureCAD' || !Array.isArray(data.objects)) throw new Error('not a project file');
+    pushHistory();
+    if (!append) { objects3D.forEach(o => { scene.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); objects3D.length = 0; }
+    if (selectedObject) setHighlight(selectedObject, false); selectedObject = null;
+    data.objects.forEach(d => {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(b64ToF32(d.geom), 3)); g.computeVertexNormals();
+      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide }));
+      m.position.fromArray(d.pos); m.rotation.set(d.rot[0], d.rot[1], d.rot[2]); m.scale.fromArray(d.scale);
+      m.userData.kind = d.kind; m.userData.mat = MATERIALS[d.mat] ? d.mat : 'Steel';
+      attachAutoCADEdges(m); scene.add(m); objects3D.push(m);
+    });
+    if (objects3D.length) { selectedObject = objects3D[objects3D.length - 1]; setHighlight(selectedObject, true); updateMeasurements(selectedObject); }
+    lastPropsKey = '';
   }
   function loadProject(file) {
     const rd = new FileReader();
     rd.onload = () => {
-      try {
-        const data = JSON.parse(rd.result);
-        if (data.app !== 'ARGestureCAD' || !Array.isArray(data.objects)) throw new Error('not a project file');
-        pushHistory();
-        objects3D.forEach(o => { scene.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-        objects3D.length = 0; selectedObject = null;
-        data.objects.forEach(d => {
-          const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(b64ToF32(d.geom), 3)); g.computeVertexNormals();
-          const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.35, metalness: 0.25, emissive: 0x000000, side: THREE.DoubleSide }));
-          m.position.fromArray(d.pos); m.rotation.set(d.rot[0], d.rot[1], d.rot[2]); m.scale.fromArray(d.scale);
-          m.userData.kind = d.kind; m.userData.mat = MATERIALS[d.mat] ? d.mat : 'Steel';
-          attachAutoCADEdges(m); scene.add(m); objects3D.push(m);
-        });
-        if (objects3D.length) { selectedObject = objects3D[objects3D.length - 1]; setHighlight(selectedObject, true); updateMeasurements(selectedObject); }
-        statusBarText.innerText = T('loaded', objects3D.length);
-      } catch (err) { console.error(err); statusBarText.innerText = T('loadFail'); }
+      try { loadFromData(JSON.parse(rd.result), false); statusBarText.innerText = T('loaded', objects3D.length); }
+      catch (err) { console.error(err); statusBarText.innerText = T('loadFail'); }
     };
     rd.readAsText(file);
   }
@@ -1606,7 +1720,7 @@ html_code = """
 
     if (activeMode === '3D') {
       const cursor3DPos = mapScreenTo3D(smoothedCursor.x, smoothedCursor.y);
-      cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
+      if (proReady) cursorMesh.position.copy(cursor3DPos).addScaledVector(camBasis().d, 50); else cursorMesh.position.set(cursor3DPos.x, cursor3DPos.y, 50);
       checkFaceHover(smoothedCursor.x, smoothedCursor.y);
     }
     const pinchDist = info.dist;
@@ -1620,7 +1734,7 @@ html_code = """
         isPinching = true;
         startPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
         lastPinchPoint = { x: smoothedCursor.x, y: smoothedCursor.y };
-        if (activeMode === '3D') autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y);
+        if (activeMode === '3D') { autoSelectUnderCursor(smoothedCursor.x, smoothedCursor.y); if (['move', 'resize', 'extrude', 'rotx', 'roty', 'rotz'].includes(currentTool) && selectedObject) pushHistory(); }
         else currentPreviewShape = { tool: currentTool, color: currentColor, start: { x: smoothedCursor.x, y: smoothedCursor.y }, end: { x: smoothedCursor.x, y: smoothedCursor.y }, points: currentTool === 'free' ? [{ x: smoothedCursor.x, y: smoothedCursor.y }] : null };
         statusBarText.innerText = T('active', activeMode, currentTool.toUpperCase());
         updatePreview(startPinchPoint, { x: smoothedCursor.x, y: smoothedCursor.y });
@@ -1634,6 +1748,163 @@ html_code = """
       else if (infos.length === 2 && activeMode === '3D') statusBarText.innerText = T('twoSeen');
     }
   }
+
+  /* ====================================================================================
+     Professional workspace: orbit / pan / zoom (mouse + touch), selection, undo-redo, shortcuts,
+     grid + soft shadows, view cube, auto-save and restore, collapsible panel
+     ==================================================================================== */
+  const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
+  const orbit = { target: new THREE.Vector3(0, 0, 0), theta: 0, elev: 0, radius: 600, dirty: true };
+  function camBasis() {
+    camera.updateMatrixWorld(); const m = camera.matrixWorld;
+    return { r: new THREE.Vector3().setFromMatrixColumn(m, 0), u: new THREE.Vector3().setFromMatrixColumn(m, 1), d: new THREE.Vector3().setFromMatrixColumn(m, 2) };   // d points towards the camera
+  }
+  function updateCamera() {
+    const e = orbit.elev, th = orbit.theta;
+    camera.position.set(orbit.target.x + orbit.radius * Math.cos(e) * Math.sin(th), orbit.target.y + orbit.radius * Math.sin(e), orbit.target.z + orbit.radius * Math.cos(e) * Math.cos(th));
+    camera.lookAt(orbit.target); camera.updateMatrixWorld(true); orbit.dirty = false;
+    document.getElementById('vc-cube').style.transform = 'rotateX(' + (-e) + 'rad) rotateY(' + (-th) + 'rad)';
+  }
+  function setView(th, e) { orbit.theta = th; orbit.elev = clampN(e, -1.5, 1.5); orbit.dirty = true; }
+  function resetView() { orbit.target.set(0, 0, 0); orbit.theta = 0; orbit.elev = 0; orbit.radius = 600; orbit.dirty = true; }
+  document.querySelectorAll('.vc-f').forEach(f => f.onclick = () => setView(parseFloat(f.dataset.th), parseFloat(f.dataset.e)));
+  scene.add(camera); camera.add(bgMesh); bgMesh.position.set(0, 0, -1100);       // video backdrop follows the camera
+
+  /* ---- grid floor + soft shadows ---- */
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  keyLight.castShadow = true; keyLight.shadow.mapSize.set(2048, 2048); keyLight.shadow.bias = -0.0006; keyLight.shadow.radius = 4;
+  Object.assign(keyLight.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 10, far: 2000 });
+  const FLOOR_MIN = -130;
+  const floorShadow = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.ShadowMaterial({ opacity: 0.3 }));
+  floorShadow.rotation.x = -Math.PI / 2; floorShadow.receiveShadow = true; scene.add(floorShadow);
+  const gridHelper = new THREE.GridHelper(1200, 48, 0x38bdf8, 0x64748b); gridHelper.material.transparent = true; gridHelper.material.opacity = 0.35; scene.add(gridHelper);
+  let gridOn = true, lastFloorT = 0;
+  function toggleGrid() { gridOn = !gridOn; document.getElementById('tb-grid').classList.toggle('active', gridOn); updateFloor(true); }
+  function updateFloor(force) {
+    const t = performance.now(); if (!force && t - lastFloorT < 500) return; lastFloorT = t;
+    let low = Infinity; objects3D.forEach(o => { const b = new THREE.Box3().setFromObject(o); if (b.min.y < low) low = b.min.y; });
+    const y = Math.min(FLOOR_MIN, low - 2);
+    floorShadow.position.y = y; gridHelper.position.y = y;
+    gridHelper.visible = gridOn && activeMode === '3D'; floorShadow.visible = activeMode === '3D';
+  }
+
+  /* ---- mouse / touch ---- */
+  const ptrs = new Map(); let mouseSt = null, pinch2 = null;
+  const canvasXY = e => { const r = canvasWebGL.getBoundingClientRect(); return { x: (e.clientX - r.left) * 1280 / r.width, y: (e.clientY - r.top) * 720 / r.height }; };
+  function pickAt(x, y) { mouse2D.set(x / 1280 * 2 - 1, -(y / 720) * 2 + 1); raycaster.setFromCamera(mouse2D, camera); const h = raycaster.intersectObjects(objects3D); return h.length ? h[0].object : null; }
+  function selectObject(o) {
+    if (selectedObject && selectedObject !== o) setHighlight(selectedObject, false);
+    selectedObject = o; if (o) { setHighlight(o, true); updateMeasurements(o); } lastPropsKey = ''; updateProps();
+  }
+  function worldPerPixel() { return 2 * orbit.radius * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / canvasWebGL.getBoundingClientRect().height; }
+  function panBy(dx, dy) { const b = camBasis(), w = worldPerPixel(); orbit.target.addScaledVector(b.r, -dx * w).addScaledVector(b.u, dy * w); orbit.dirty = true; }
+  canvasWebGL.addEventListener('contextmenu', e => e.preventDefault());
+  canvasWebGL.addEventListener('pointerdown', e => {
+    if (activeMode !== '3D') return;
+    try { canvasWebGL.setPointerCapture(e.pointerId); } catch (err) { }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) { mouseSt = null; const v = [...ptrs.values()]; pinch2 = { d: Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y), mx: (v[0].x + v[1].x) / 2, my: (v[0].y + v[1].y) / 2 }; return; }
+    const p = canvasXY(e);
+    mouseSt = { sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, hit: e.button === 0 ? pickAt(p.x, p.y) : null, mode: 'pending', pan: e.button === 2 || e.button === 1 || e.shiftKey };
+  });
+  canvasWebGL.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch2 && ptrs.size === 2) {
+      const v = [...ptrs.values()], d = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y), mx = (v[0].x + v[1].x) / 2, my = (v[0].y + v[1].y) / 2;
+      orbit.radius = clampN(orbit.radius * pinch2.d / Math.max(d, 10), 150, 1800); panBy(mx - pinch2.mx, my - pinch2.my); pinch2 = { d, mx, my }; orbit.dirty = true; return;
+    }
+    if (!mouseSt) return;
+    const dx = e.clientX - mouseSt.lx, dy = e.clientY - mouseSt.ly;
+    if (mouseSt.mode === 'pending') {
+      if (Math.hypot(e.clientX - mouseSt.sx, e.clientY - mouseSt.sy) < 5) return;
+      mouseSt.mode = mouseSt.pan ? 'pan' : (mouseSt.hit && currentTool === 'move' ? 'drag' : 'orbit');
+      if (mouseSt.mode === 'drag') { pushHistory(); selectObject(mouseSt.hit); }
+    }
+    if (mouseSt.mode === 'orbit') { orbit.theta -= dx * 0.006; orbit.elev = clampN(orbit.elev + dy * 0.006, -1.5, 1.5); orbit.dirty = true; }
+    else if (mouseSt.mode === 'pan') panBy(dx, dy);
+    else if (mouseSt.mode === 'drag' && selectedObject) { const b = camBasis(), w = worldPerPixel(); selectedObject.position.addScaledVector(b.r, dx * w).addScaledVector(b.u, -dy * w); }
+    mouseSt.lx = e.clientX; mouseSt.ly = e.clientY;
+  });
+  const endPtr = e => {
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch2 = null;
+    if (mouseSt && ptrs.size === 0) { if (mouseSt.mode === 'pending' && e.type === 'pointerup') selectObject(mouseSt.hit); mouseSt = null; }
+  };
+  canvasWebGL.addEventListener('pointerup', endPtr); canvasWebGL.addEventListener('pointercancel', endPtr);
+  canvasWebGL.addEventListener('wheel', e => { if (activeMode !== '3D') return; e.preventDefault(); orbit.radius = clampN(orbit.radius * Math.exp(e.deltaY * 0.0012), 150, 1800); orbit.dirty = true; }, { passive: false });
+  canvasWebGL.addEventListener('dblclick', e => {
+    if (activeMode !== '3D') return;
+    const p = canvasXY(e), hit = pickAt(p.x, p.y); if (hit) { selectObject(hit); return; }
+    const type = ['sphere', 'cube', 'cone', 'cylinder', 'pyramid'].includes(currentTool) ? currentTool : 'cube';
+    const b = camBasis(), plane = new THREE.Plane().setFromNormalAndCoplanarPoint(b.d, orbit.target), pos = new THREE.Vector3();
+    mouse2D.set(p.x / 1280 * 2 - 1, -(p.y / 720) * 2 + 1); raycaster.setFromCamera(mouse2D, camera);
+    if (!raycaster.ray.intersectPlane(plane, pos)) return;
+    pushHistory(); const m = create3DShape(type, 100, pos); scene.add(m); objects3D.push(m); selectObject(m); statusBarText.innerText = T('shapeAdded');
+  });
+
+  /* ---- duplicate + keyboard ---- */
+  function duplicateSelected() {
+    if (!selectedObject || activeMode !== '3D' || !objects3D.includes(selectedObject)) return;
+    pushHistory(); const o = selectedObject, m = new THREE.Mesh(o.geometry.clone(), o.material.clone()), b = camBasis();
+    m.position.copy(o.position).addScaledVector(b.r, 25).addScaledVector(b.u, -25); m.rotation.copy(o.rotation); m.scale.copy(o.scale);
+    m.userData.kind = o.userData.kind; m.userData.mat = o.userData.mat; m.material.emissive.setHex(0x000000);
+    attachAutoCADEdges(m); scene.add(m); objects3D.push(m); selectObject(m); statusBarText.innerText = T('dup');
+  }
+  function showKeys(show) { document.getElementById('keys').style.display = show ? 'flex' : 'none'; }
+  document.addEventListener('keydown', e => {
+    const tag = ((e.target && e.target.tagName) || '').toLowerCase(); if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && k === 'z' && !e.shiftKey) { e.preventDefault(); performUndo(); }
+    else if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); performRedo(); }
+    else if (ctrl && k === 's') { e.preventDefault(); saveProject(); }
+    else if (ctrl && k === 'd') { e.preventDefault(); duplicateSelected(); }
+    else if (!ctrl && (k === 'delete' || k === 'backspace')) { e.preventDefault(); deleteSelectedObject(); }
+    else if (!ctrl) {
+      if (k === 'g') toggleGrid(); else if (k === 'f' || k === 'home') resetView();
+      else if (k === '1') setView(0, 0); else if (k === '2') setView(Math.PI / 2, 0); else if (k === '3') setView(0, 1.5);
+      else if (k === 'h') showGuide(true); else if (k === 'k') showKeys(true); else if (k === 'escape') { showGuide(false); showKeys(false); }
+    }
+  });
+  document.getElementById('chk-spin').onchange = e => { autoSpin = e.target.checked; };
+
+  /* ---- collapsible panel groups ---- */
+  document.querySelectorAll('#ui-panel .ui-group').forEach((g, i) => {
+    const lab = g.querySelector(':scope > .ui-label'); if (!lab || i === 0) return;
+    lab.classList.add('fold'); lab.onclick = () => g.classList.toggle('collapsed');
+  });
+  ['group-project', 'group-section', 'group-3d-modification'].forEach(id => { const g = document.getElementById(id); if (g) g.classList.add('collapsed'); });
+
+  /* ---- auto-save and restore ---- */
+  let lastSig = '', autosaveArmed = true, pendingRestore = null;
+  function projectSig() { return objects3D.map(o => o.uuid + '|' + o.geometry.uuid + '|' + o.position.toArray().map(v => v.toFixed(2)) + '|' + o.rotation.x.toFixed(3) + ',' + o.rotation.y.toFixed(3) + ',' + o.rotation.z.toFixed(3) + '|' + o.scale.toArray().map(v => v.toFixed(3)) + '|' + o.material.color.getHexString() + (o.userData.mat || '')).join(';'); }
+  setInterval(() => {
+    if (!autosaveArmed) return;
+    const sig = projectSig(); if (sig === lastSig) return; lastSig = sig;
+    try {
+      if (!objects3D.length) { localStorage.removeItem('cadAutosave'); return; }
+      localStorage.setItem('cadAutosave', JSON.stringify({ t: Date.now(), data: serializeProject() }));
+      const el = document.getElementById('as-ind'); el.style.opacity = 1; setTimeout(() => { el.style.opacity = 0; }, 1500);
+    } catch (e) { }
+  }, 3000);
+  try {
+    const raw = localStorage.getItem('cadAutosave');
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && o.data && o.data.objects && o.data.objects.length) {
+        pendingRestore = o; autosaveArmed = false;
+        const tm = new Date(o.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('restore-text').innerText = T('restoreMsg', o.data.objects.length, tm); document.getElementById('restore-bar').style.display = 'flex';
+      }
+    }
+  } catch (e) { }
+  function restoreAutosave() {
+    if (pendingRestore) { loadFromData(pendingRestore.data, objects3D.length > 0); statusBarText.innerText = T('restored', pendingRestore.data.objects.length); }
+    discardAutosave(true);
+  }
+  function discardAutosave(keep) {
+    if (!keep) { try { localStorage.removeItem('cadAutosave'); } catch (e) { } }
+    pendingRestore = null; autosaveArmed = true; lastSig = projectSig(); document.getElementById('restore-bar').style.display = 'none';
+  }
+  proReady = true; updateCamera(); updateFloor(true); applyLang();
 
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
