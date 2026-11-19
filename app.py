@@ -463,6 +463,8 @@ html_code = """
       </div>
       <button id="btn-clear" onclick="clearCanvas()">Clear All</button>
       <label class="chk"><input type="checkbox" id="chk-spin"> Auto-rotate objects</label>
+      <label class="chk"><input type="checkbox" id="chk-shadow"> Shadows (needs a fast PC)</label>
+      <div id="ai-fps" style="font-size:11px;opacity:.7;margin-top:4px">AI: -- fps</div>
     </div>
   </div>
 
@@ -711,7 +713,7 @@ html_code = """
   function setLang(l) { lang = l; try { localStorage.setItem('cadLang', l); } catch (e) { } applyLang(); }
 
   Object.assign(BM, {
-    'Language / Bahasa': 'Language / Bahasa', 'Undo': 'Buat asal', 'Redo': 'Buat semula', 'Auto-rotate objects': 'Putar objek secara automatik', 'Subtract': 'Tolak',
+    'Language / Bahasa': 'Language / Bahasa', 'Undo': 'Buat asal', 'Redo': 'Buat semula', 'Auto-rotate objects': 'Putar objek secara automatik', 'Shadows (needs a fast PC)': 'Bayang (perlu PC laju)', 'Subtract': 'Tolak',
     'Front': 'Depan', 'Back': 'Belakang', 'Right': 'Kanan', 'Left': 'Kiri', 'Top': 'Atas', 'Bottom': 'Bawah', 'Restore': 'Pulihkan', 'Discard': 'Buang', '✓ Auto-saved': '✓ Disimpan automatik',
     'Keyboard & mouse shortcuts': 'Pintasan papan kekunci & tetikus', 'Keyboard': 'Papan kekunci', 'Mouse and touch': 'Tetikus dan sentuhan', 'Close': 'Tutup',
     'Save project (Ctrl+S)': 'Simpan projek (Ctrl+S)', 'Duplicate selected': 'Salin objek dipilih', 'Delete selected': 'Padam objek dipilih', 'Show / hide grid': 'Papar / sembunyi grid', 'Reset view': 'Set semula pandangan',
@@ -1778,8 +1780,8 @@ html_code = """
   scene.add(camera); camera.add(bgMesh); bgMesh.position.set(0, 0, -1100);       // video backdrop follows the camera
 
   /* ---- grid floor + soft shadows ---- */
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;
-  keyLight.castShadow = true; keyLight.shadow.mapSize.set(1024, 1024); keyLight.shadow.bias = -0.0006; keyLight.shadow.radius = 4;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.enabled = false;
+  keyLight.castShadow = false; keyLight.shadow.mapSize.set(1024, 1024); keyLight.shadow.bias = -0.0006; keyLight.shadow.radius = 4;
   Object.assign(keyLight.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 10, far: 2000 });
   const FLOOR_MIN = -130;
   const floorShadow = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.ShadowMaterial({ opacity: 0.3 }));
@@ -1792,7 +1794,7 @@ html_code = """
     let low = Infinity; objects3D.forEach(o => { const b = new THREE.Box3().setFromObject(o); if (b.min.y < low) low = b.min.y; });
     const y = Math.min(FLOOR_MIN, low - 2);
     floorShadow.position.y = y; gridHelper.position.y = y;
-    gridHelper.visible = gridOn && activeMode === '3D'; floorShadow.visible = activeMode === '3D';
+    gridHelper.visible = gridOn && activeMode === '3D'; floorShadow.visible = renderer.shadowMap.enabled && activeMode === '3D';
   }
 
   /* ---- mouse / touch ---- */
@@ -1871,6 +1873,7 @@ html_code = """
       else if (k === 'h') showGuide(true); else if (k === 'k') showKeys(true); else if (k === 'escape') { showGuide(false); showKeys(false); }
     }
   });
+  document.getElementById('chk-shadow').onchange = e => { renderer.shadowMap.enabled = e.target.checked; keyLight.castShadow = e.target.checked; floorShadow.visible = e.target.checked && activeMode === '3D'; scene.traverse(m => { if (m.material) m.material.needsUpdate = true; }); renderer.shadowMap.needsUpdate = true; };
   document.getElementById('chk-spin').onchange = e => { autoSpin = e.target.checked; };
 
   /* ---- collapsible panel groups ---- */
@@ -1924,11 +1927,16 @@ html_code = """
     minTrackingConfidence: 0.65
   });
 
-  hands.onResults(onResults);
+  let sentCount = 0, gotCount = 0, lastFpsT = performance.now();
+  hands.onResults(r => { gotCount++; onResults(r); });
+  setInterval(() => { const t = performance.now(), dt = (t - lastFpsT) / 1000; lastFpsT = t; document.getElementById('ai-fps').innerText = 'AI: ' + (gotCount / dt).toFixed(0) + ' fps'; gotCount = 0; }, 2000);
 
   const cameraMedia = new Camera(videoElement, {
     onFrame: async () => {
-      try { await hands.send({ image: videoElement }); } catch (err) { }
+      if (hands.__busy && performance.now() - hands.__busy < 1500) return;     // never let one slow frame stall the loop
+      hands.__busy = performance.now(); sentCount++;
+      try { await Promise.race([hands.send({ image: videoElement }), new Promise(r => setTimeout(r, 1500))]); } catch (err) { }
+      hands.__busy = 0;
     },
     width: 1280,
     height: 720
